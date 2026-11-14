@@ -179,22 +179,6 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.6}
 .toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:16px 28px;border-radius:10px;font-size:21px;opacity:0;pointer-events:none;transition:.25s;z-index:30}
 .toast.on{opacity:1;transform:translateX(-50%)}
 
-/* 背の低い画面（ノートPCのブラウザなど） */
-@media (max-height:820px){
-  .bar{height:70px}
-  #run .center{gap:8px;padding:16px 24px;justify-content:flex-start;overflow:auto}
-  .timer{font-size:120px}
-  .center .topic{font-size:34px}
-  .center .pos,.status{font-size:19px}
-  .ctrls .btn{min-height:58px;min-width:0;font-size:19px;padding:0 16px}
-  .cap{height:132px}
-  .cap .line{font-size:24px}
-  .cap .line.old{font-size:18px}
-  .cap .tr{font-size:19px;min-height:26px}
-  .cap .btn{min-height:46px;font-size:17px}
-  .seg button{min-height:44px}
-  .col{padding:18px}
-}
 /* 中くらいの画面（ノートPC・タブレット） */
 @media (max-width:1500px){
   body{font-size:18px}
@@ -237,6 +221,22 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.6}
   .timer{font-size:120px}
 }
 
+/* 背の低い画面（ノートPCのブラウザなど） */
+@media (max-height:820px){
+  .bar{height:70px}
+  #run .center{gap:8px;padding:16px 24px;justify-content:flex-start;overflow:auto}
+  .timer{font-size:120px}
+  .center .topic{font-size:34px}
+  .center .pos,.status{font-size:19px}
+  .ctrls .btn{min-height:58px;min-width:0;font-size:19px;padding:0 16px}
+  .cap{height:132px}
+  .cap .line{font-size:24px}
+  .cap .line.old{font-size:18px}
+  .cap .tr{font-size:19px;min-height:26px}
+  .cap .btn{min-height:46px;font-size:17px}
+  .seg button{min-height:44px}
+  .col{padding:18px}
+}
 /* スマホで開いたまとめ */
 #card{position:static;min-height:100vh;background:var(--bg);overflow:auto}
 body.phone{overflow:auto;font-size:17px}
