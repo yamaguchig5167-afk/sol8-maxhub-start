@@ -331,6 +331,52 @@ body > .cap{display:none}
 .usage{display:grid;grid-template-columns:96px repeat(13,1fr);white-space:nowrap;gap:3px;font-size:14px;color:var(--sub)}
 .usage i{display:block;height:26px;border-radius:4px;background:var(--soft)}
 .usage .h{text-align:center}
+.tiles.four{grid-template-columns:1fr 1fr;gap:22px}
+.tiles.four .tile{grid-template-columns:84px 1fr;padding:26px 34px;gap:24px;min-height:178px}
+.tiles.four .tile .ic{width:84px;height:84px}
+.tiles.four .tile b{font-size:34px}
+.tiles.four .tile span{font-size:19px;margin-top:6px}
+#home .body{gap:28px}
+#play .pbody{flex:1;display:grid;grid-template-columns:1fr 600px;min-height:0}
+.pview{position:relative;background:#0F1A16;overflow:hidden}
+.pview video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform:scaleX(-1)}
+.pview canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.pview.nocam video{display:none}
+.pmsg{position:absolute;left:0;right:0;top:28px;display:flex;justify-content:center;pointer-events:none}
+.pmsg span{background:rgba(15,26,22,.82);color:#fff;border-radius:16px;padding:16px 36px;font-size:44px;font-weight:700;text-align:center;line-height:1.3}
+.pmsg span small{display:block;font-size:26px;font-weight:400;color:var(--on-main-sub);margin-top:4px}
+.pmsg span.big{font-size:96px;padding:6px 40px}
+.pmsg span.ans{font-size:72px;background:var(--accent);color:var(--ink)}
+.pmsg span.ans small{color:var(--ink)}
+.nocam .pmsg{top:42%}
+.pmsg.low{top:auto;bottom:28px}
+.pside{background:var(--paper);border-left:2px solid var(--line);padding:32px 36px;display:flex;flex-direction:column;gap:18px;overflow:auto}
+.pside h2{margin:0;font-size:36px;line-height:1.3}
+.pside .lead{margin:0;font-size:22px;color:var(--sub)}
+.pside .help{margin:0;font-size:18px;color:var(--sub)}
+.pside .btn.big{min-height:84px;font-size:28px}
+.pbig{display:block;text-align:left;border:2px solid var(--line);background:var(--bg);border-radius:14px;padding:22px 26px}
+.pbig b{display:block;font-size:30px}
+.pbig span{display:block;font-size:19px;color:var(--sub);margin-top:6px}
+.pside .seg{display:flex;border:2px solid var(--line);border-radius:12px;overflow:hidden}
+.pside .seg button{flex:1;min-height:64px;border:0;background:var(--paper);font-size:22px;font-weight:700}
+.pside .seg button.on{background:var(--main);color:#fff}
+.ptotal{display:flex;align-items:baseline;gap:14px;font-size:28px;font-weight:700}
+.ptotal b{font-size:150px;line-height:1}
+.pside .tr{height:14px;border-radius:7px;background:var(--soft);overflow:hidden}
+.pside .tr i{display:block;height:100%;width:0;background:var(--accent)}
+.qno{margin:0;font-size:20px;color:var(--sub)}
+.qq{font-size:40px!important}
+.ox{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ox>div{border-radius:14px;padding:16px 20px;font-size:26px;font-weight:700;background:var(--bg);border:3px solid var(--line)}
+.ox b{display:block;font-size:64px;line-height:1}
+.ox .num{font-size:72px;margin-right:6px}
+.ox .o b{color:#1E7A50}.ox .x b{color:#B3261E}
+.ox.done>div{opacity:.5}.ox.done>div.win{opacity:1;border-color:var(--accent);background:#FFF6E0}
+.qe{margin:0;font-size:22px;line-height:1.6}
+.qres{margin:0;padding-left:1.4em;font-size:20px}.qres li{margin-bottom:10px}.qres small{display:block;color:var(--sub);font-size:17px}
+.qedit summary{cursor:pointer;font-size:20px;font-weight:700;color:var(--sub);min-height:48px;display:flex;align-items:center}
+.qedit textarea{min-height:200px;font-size:18px}
 .shotimg{max-width:100%;border-radius:10px;border:2px solid var(--line)}
 .photos{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
 .photos img{width:220px;border-radius:8px;border:2px solid var(--line)}
@@ -366,6 +412,9 @@ body.phone .bar-row .tr{height:22px}
 
 /* 中くらいの画面（ノートPC・タブレット） */
 @media (max-width:1500px){
+  #play .pbody{grid-template-columns:1fr 460px}
+  .tiles.four .tile b{font-size:28px}
+  .ptotal b{font-size:110px}
   .hv{grid-template-columns:1fr 480px;padding:40px 48px;gap:32px}
   .hv .ask{font-size:46px}
   .hv .big b{font-size:160px}
@@ -399,6 +448,10 @@ body.phone .bar-row .tr{height:22px}
   .einfo .big{font-size:40px}
 }
 @media (max-width:1100px){
+  .tiles.four{grid-template-columns:1fr 1fr}
+  .tiles.four .tile{grid-template-columns:1fr;gap:8px;padding:20px;min-height:0}
+  .tiles.four .tile .ic{width:56px;height:56px}
+  #play .pbody{grid-template-columns:1fr;grid-template-rows:45vh 1fr}
   .hv{grid-template-columns:1fr}
   .hv .camview{display:none}
   .campill small{display:none}
@@ -456,7 +509,7 @@ body.phone .bar-row .tr{height:22px}
       <h1>この部屋を、何に使いますか</h1>
       <div class="next" id="homeNext"></div>
     </div>
-    <div class="tiles three">
+    <div class="tiles four">
       <button class="tile meet" type="button" data-go="setup">
         <svg class="ic" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="20" width="92" height="62" rx="6"/><path d="M60 82v18M38 100h44"/><circle cx="60" cy="51" r="20"/><path d="M60 39v12l8 6"/></svg>
         <div><b>会議をはじめる</b><span>話した言葉を字幕にして、<br>決まったことと宿題をAIが拾います</span></div>
@@ -468,6 +521,10 @@ body.phone .bar-row .tr{height:22px}
       <button class="tile" type="button" data-go="idle">
         <svg class="ic" viewBox="0 0 120 120" fill="none" stroke="var(--main)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="20" width="92" height="62" rx="6"/><path d="M60 82v18M38 100h44M30 40h40M30 54h60M30 66h28"/></svg>
         <div><b>待機画面にする</b><span>会議のない時間は、<br>予定とお知らせを流します</span></div>
+      </button>
+      <button class="tile" type="button" data-go="play">
+        <svg class="ic" viewBox="0 0 120 120" fill="none" stroke="var(--main)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="60" cy="26" r="11"/><path d="M60 40v34M60 74l-16 32M60 74l16 32M60 50 34 22M60 50l26-28"/></svg>
+        <div><b>みんなで体を動かす</b><span>体操の回数を数える・体で答える○×クイズ。<br>公民館・学校・デイサービスで</span></div>
       </button>
     </div>
     <div class="subrow">
@@ -701,6 +758,20 @@ body.phone .bar-row .tr{height:22px}
 <div class="pick" id="pick" role="menu"><button type="button" class="btn main" data-pk="d">決まったことに</button><button type="button" class="btn" data-pk="t">宿題に</button><button type="button" class="btn quiet" data-pk="x">閉じる</button></div>
 <div class="stage" id="stage" role="dialog" aria-label="大きく映す"></div>
 <div class="claps" id="claps" aria-hidden="true"></div>
+
+<!-- みんなで体を動かす -->
+<section class="screen" id="play" aria-label="みんなで体を動かす">
+  <div class="bar">
+    <span class="co">みんなで体を動かす</span>
+    <span class="grow"></span>
+    <span class="clock num" data-clock></span>
+    <button class="btn ghost" type="button" data-go="home">スタート画面へ</button>
+  </div>
+  <div class="pbody">
+    <div class="pview" id="pView"><video id="pV" muted playsinline></video><canvas id="pCv"></canvas><div class="pmsg" id="pMsg" aria-live="polite"></div></div>
+    <div class="pside" id="pSide"></div>
+  </div>
+</section>
 
 <!-- カメラ -->
 <video id="camV" muted playsinline style="position:fixed;left:-8px;top:0;width:4px;height:4px;opacity:0;pointer-events:none" aria-hidden="true"></video>
@@ -3119,6 +3190,7 @@ function go(id){
   if (id === 'run' || id === 'event') mountCap(id);
   else if (listening) stopRec();
   if (id === 'event') startEvent();
+  if (id === 'play') openPlay();
   $('#pick').classList.remove('on');
   camUI();
   poke();
@@ -4097,7 +4169,7 @@ function camStop(){
   if (hvS) { hvClose(); toast('カメラが止まったので、挙手の数えを中止しました'); }
   if (C.st) C.st.getTracks().forEach(t => t.stop());
   C.st = null; $('#camV').srcObject = null; $('#camPrev').srcObject = null;
-  C.ppl = C.up = 0; holdOff(); $('#ptr').classList.remove('on'); camUI();
+  C.ppl = C.up = 0; holdOff(); if (screen === 'play') { G = null; PL.mode = 'menu'; renderPlay(); } $('#ptr').classList.remove('on'); camUI();
 }
 const needGes = () => C.on && S.camGest && screen === 'run' && M && !M.ended && !hvS && !$('.modal.on') && !$('#stage').classList.contains('on') && !$('#pick').classList.contains('on') && document.visibilityState === 'visible';
 // 推論は 960px 幅に縮めた絵で行う（MAXHUB の PC の負荷を抑える）。区切って探すのは挙手を数えている間だけ、0.6秒に1回まで
@@ -4130,9 +4202,10 @@ function camLoop(gen){
       if (needGes()) gesture(v, t0); else { if (C.g) { C.g = ''; holdOff(); } $('#ptr').classList.remove('on'); }
       if ($('#camDlg').classList.contains('on')) drawPrev();
       if (hvS && hvS.ph === 'count') hvTick();
+      playTick(C.last);
     } catch(e){}
   }
-  const took = performance.now() - t0, busy = needGes() || hvS || $('#camDlg').classList.contains('on');
+  const took = performance.now() - t0, busy = needGes() || hvS || screen === 'play' || $('#camDlg').classList.contains('on');
   // 処理が重いときは、そのぶん間をあけて画面の操作を止めない
   C.timer = setTimeout(() => camLoop(gen), Math.max(busy ? 100 : 300, took * 1.5) - Math.min(took, 80));
 }
@@ -4390,12 +4463,211 @@ async function camTest(urls){
   for (const u of urls) {
     const im = new Image(); im.src = u; await im.decode();
     const c = countPose(pose.detect(im)), t = countPose(poseTiled(pose, im, im.naturalWidth, im.naturalHeight)), g = ges.recognize(im);
-    out.push({ pose: c.n, tiled: t.n + '/' + t.u, od: countOD(od.detect(im)), up: c.u, ges: (g.gestures || []).map(x => x[0].categoryName + ':' + x[0].score.toFixed(2)) });
+    const bp = visibleBodies(pose.detect(im)).map(bodyPose).join(',');
+    out.push({ body: bp, pose: c.n, tiled: t.n + '/' + t.u, od: countOD(od.detect(im)), up: c.u, ges: (g.gestures || []).map(x => x[0].categoryName + ':' + x[0].score.toFixed(2)) });
   }
   pose.close(); ges.close(); od.close();
   return out;
 }
 
+/* ---------- みんなで体を動かす（体操の回数・体で答える○×クイズ）。映像は残さず、回数と人数だけを数える ---------- */
+// 1人ぶんの姿勢を見分ける。座ったままでもできる動きだけ
+function bodyPose(lm){
+  const n = lm[0], l = lm[11], r = lm[12], lw = lm[15], rw = lm[16];
+  if (vis(lw) < .3 || vis(rw) < .3) return '';
+  const sy = (l.y + r.y) / 2, sw = Math.max(.02, Math.abs(l.x - r.x));
+  const bothUp = lw.y < n.y && rw.y < n.y;
+  const bothDown = lw.y > sy + sw * .5 && rw.y > sy + sw * .5;
+  const spread = Math.abs(lw.x - rw.x);
+  const side = Math.abs(lw.y - sy) < sw * .7 && Math.abs(rw.y - sy) < sw * .7 && spread > sw * 2.2;
+  // 腕の交差：手首の左右の並びが、肩の並びと逆になっていて、手首が胸の高さにある
+  const crossed = Math.sign(lw.x - rw.x) !== Math.sign(l.x - r.x) && [lw, rw].every(w => w.y > sy - sw * .4 && w.y < sy + sw * 2.4);
+  return bothUp ? 'up' : side ? 'side' : crossed ? 'cross' : bothDown ? 'down' : '';
+}
+const visibleBodies = r => ((r && r.landmarks) || []).filter(lm => Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) >= .4);
+
+const EX = {
+  banzai: { name: 'バンザイ', how: '両手をまっすぐ上に挙げて、ひざに下ろす', top: 'up', base: 'down' },
+  side: { name: '腕を横にひらく', how: '両腕を肩の高さで横にひらいて、ひざに下ろす', top: 'side', base: 'down' }
+};
+const QUIZ_DEF = '阿蘇山は、いまも活動している火山である｜○｜阿蘇山の中岳は、いまも活動を続けています\n熊本城の天守閣は、地震のあと修理が終わり、中に入れるようになった｜○｜2021年から天守閣の中を見学できます\n水は、のどがかわいてから飲めばよい｜×｜のどがかわく前に、こまめに飲むのがおすすめです\n地震でゆれたら、まず机の下などで頭を守る｜○｜ゆれている間は、頭を守って動かないようにします\n台湾で使われている漢字は、日本と同じ形である｜×｜台湾は「繁体字（はんたいじ）」で、日本の漢字と形がちがう字があります';
+let G = null;   // 体を動かす画面の状態
+const PL = { mode: 'menu', ex: 'banzai', sec: 60 };
+function parseQuiz(){
+  return (S.quiz || QUIZ_DEF).split('\n').map(l => l.split(/[｜|]/).map(x => x.trim())).filter(a => a[0] && /^[○×〇xX]$/.test(a[1] || ''))
+    .map(a => ({ q: a[0].slice(0, 60), a: /^[○〇]$/.test(a[1]) ? 'o' : 'x', e: (a[2] || '').slice(0, 80) })).slice(0, 30);
+}
+function openPlay(){
+  PL.mode = 'menu'; G = null;
+  const pv = $('#pV'); pv.srcObject = C.on ? C.st : null; if (C.on) pv.play().catch(() => {});
+  renderPlay();
+}
+function renderPlay(){
+  const side = $('#pSide'), msg = $('#pMsg');
+  msg.className = 'pmsg';
+  $('#pView').classList.toggle('nocam', !C.on);
+  if (!C.on) {
+    msg.innerHTML = '<span>カメラを使うと、<br>体の動きを数えられます</span>';
+    side.innerHTML = `<h2>みんなで体を動かす</h2><p class="lead">体操の回数を数えたり、体で○×クイズに答えたりします。公民館・学校・デイサービスの集まりで使えます。</p><button class="btn main big" type="button" data-pl="cam">カメラを使う</button><p class="help">映像は残しません。数えるのは回数と人数だけです。</p>`;
+    return;
+  }
+  if (PL.mode === 'menu') {
+    msg.innerHTML = '';
+    side.innerHTML = `<h2>何をしますか</h2>
+      <button class="pbig" type="button" data-pl="gym"><b>体操の回数を数える</b><span>みんなの回数を画面に出して、合計を数えます。座ったままでできます</span></button>
+      <button class="pbig" type="button" data-pl="quiz"><b>体で答える ○×クイズ</b><span>○は両手を頭の上に、×は胸の前で腕を交差。カメラが○と×の人数を数えます</span></button>
+      <details class="qedit"><summary>クイズの問題を変える</summary><textarea class="in" id="qText" spellcheck="false"></textarea><p class="help">1行に1問。「問題｜○か×｜ひとこと」の順に書きます</p><button class="btn" type="button" data-pl="qsave">問題を保存する</button></details>
+      <p class="help">映像は残しません。数えるのは回数と人数だけです。</p>`;
+    $('#qText').value = S.quiz || QUIZ_DEF;
+    return;
+  }
+  if (PL.mode === 'gym') {
+    const e = EX[PL.ex], best = store.get('ms-gym', {})[PL.ex] || 0;
+    if (!G || G.ph === 'ready') {
+      msg.innerHTML = `<span>${esc(e.name)}<small>${esc(e.how)}</small></span>`;
+      side.innerHTML = `<h2>体操の回数を数える</h2>
+        <div class="seg" role="group" aria-label="体操">${Object.entries(EX).map(([k, x]) => `<button type="button" data-plx="${k}" class="${k === PL.ex ? 'on' : ''}">${esc(x.name)}</button>`).join('')}</div>
+        <div class="seg" role="group" aria-label="時間">${[30, 60, 180].map(s => `<button type="button" data-pls="${s}" class="${s === PL.sec ? 'on' : ''}">${s < 60 ? s + '秒' : s / 60 + '分'}</button>`).join('')}</div>
+        <button class="btn main big" type="button" data-pl="go">はじめる</button>
+        <p class="help">${best ? `これまでのいちばん：みんなで ${best}回` : 'はじめての記録になります'}</p>
+        <button class="btn quiet" type="button" data-pl="menu">ほかの遊びを選ぶ</button>`;
+    } else if (G.ph === 'run') {
+      side.innerHTML = `<h2>${esc(e.name)}</h2><div class="ptotal"><span>みんなで</span><b class="num" id="gTot">0</b><span>回</span></div><div class="tr"><i id="gBar"></i></div><p class="help num" id="gLeft"></p><button class="btn" type="button" data-pl="stop">とめる</button>`;
+    } else {
+      msg.innerHTML = `<span>おつかれさまでした<small>みんなで ${G.tot}回${G.best ? '。これまでで、いちばんです' : ''}</small></span>`;
+      side.innerHTML = `<h2>${esc(e.name)}の結果</h2><div class="ptotal"><span>みんなで</span><b class="num">${G.tot}</b><span>回</span></div><p class="help">参加した人：${G.ppl}人${best ? `　これまでのいちばん：${best}回` : ''}</p><button class="btn main big" type="button" data-pl="go">もう一度</button><button class="btn quiet" type="button" data-pl="gym">体操を変える</button><button class="btn quiet" type="button" data-pl="menu">ほかの遊びを選ぶ</button>`;
+    }
+    return;
+  }
+  // ○×クイズ
+  const Q = G.qs[G.i];
+  if (!Q) {
+    msg.innerHTML = `<span>おしまい<small>全${G.qs.length}問、おつかれさまでした</small></span>`;
+    side.innerHTML = `<h2>クイズの結果</h2><ol class="qres">${G.log.map(x => `<li>${esc(x.q)}<small>正解 ${x.a === 'o' ? '○' : '×'}　○ ${x.o}人・× ${x.x}人</small></li>`).join('')}</ol><button class="btn main big" type="button" data-pl="quiz">もう一度</button><button class="btn quiet" type="button" data-pl="menu">ほかの遊びを選ぶ</button>`;
+    return;
+  }
+  const head = `<p class="qno num">第${G.i + 1}問 ／ 全${G.qs.length}問</p><h2 class="qq">${esc(Q.q)}</h2>`;
+  if (G.ph === 'ready') {
+    msg.innerHTML = '<span>○は両手を頭の上に<small>×は胸の前で腕を交差</small></span>';
+    side.innerHTML = head + `<button class="btn main big" type="button" data-pl="ask">答えてもらう</button><button class="btn quiet" type="button" data-pl="skip">この問題をとばす</button>`;
+  } else if (G.ph === 'ask') {
+    side.innerHTML = head + `<div class="ox"><div class="o"><b>○</b><span class="num" id="qO">0</span>人</div><div class="x"><b>×</b><span class="num" id="qX">0</span>人</div></div><div class="tr"><i id="gBar"></i></div>`;
+  } else {
+    const ok = Q.a === 'o' ? G.o : G.x;
+    msg.innerHTML = `<span class="ans">正解は ${Q.a === 'o' ? '○' : '×'}<small>${ok}人が正解</small></span>`;
+    side.innerHTML = head + `<div class="ox done"><div class="o${Q.a === 'o' ? ' win' : ''}"><b>○</b><span class="num">${G.o}</span>人</div><div class="x${Q.a === 'x' ? ' win' : ''}"><b>×</b><span class="num">${G.x}</span>人</div></div>${Q.e ? `<p class="qe">${esc(Q.e)}</p>` : ''}<button class="btn main big" type="button" data-pl="next">${G.i + 1 < G.qs.length ? '次の問題へ' : '結果を見る'}</button>`;
+  }
+}
+const GYM_COLORS = ['#F0A202', '#3FBF7F', '#5AB0FF', '#FF7A7A', '#C792EA', '#FFD166'];
+// 毎回の画像認識のあとに呼ぶ。人の対応づけは鼻の位置が近い人を同じ人とみなす（顔で見分けない）
+function playTick(r){
+  if (screen !== 'play') return;
+  const bodies = visibleBodies(r), now = Date.now();
+  if (G && G.mode === 'gym' && G.ph === 'run') {
+    const e = EX[PL.ex];
+    bodies.forEach(lm => {
+      const nx = lm[0].x, ny = lm[0].y, sw = Math.max(.03, Math.abs(lm[11].x - lm[12].x));
+      let p = G.P.filter(p => !p.used).sort((a, b) => Math.hypot(a.x - nx, a.y - ny) - Math.hypot(b.x - nx, b.y - ny))[0];
+      if (!p || Math.hypot(p.x - nx, p.y - ny) > Math.max(.08, sw * 1.2)) { p = { x: nx, y: ny, n: 0, st: '', c: GYM_COLORS[G.P.length % GYM_COLORS.length] }; G.P.push(p); }
+      p.used = true; p.x = nx; p.y = ny; p.seen = now; p.lm = lm;
+      const s = bodyPose(lm);
+      if (s === e.top && p.st === 'base') { p.n++; G.tot++; if (G.tot % 50 === 0) toast(`みんなで ${G.tot}回！`); }
+      if (s === e.top) p.st = 'top'; else if (s === e.base) p.st = 'base';
+    });
+    G.P.forEach(p => p.used = false);
+    G.P = G.P.filter(p => now - (p.seen || 0) < 3000 || p.n > 0);
+    G.ppl = Math.max(G.ppl, G.P.filter(p => now - p.seen < 3000).length);
+    const left = Math.max(0, G.end - now);
+    const t = $('#gTot'); if (t) t.textContent = G.tot;
+    const b = $('#gBar'); if (b) b.style.width = (100 - left / (PL.sec * 10)).toFixed(1) + '%';
+    const lf = $('#gLeft'); if (lf) lf.textContent = `のこり ${Math.ceil(left / 1000)}秒`;
+    const pm = $('#pMsg'); pm.className = 'pmsg low'; pm.innerHTML = `<span class="num big">${Math.ceil(left / 1000)}</span>`;
+    if (!left) gymEnd();
+  }
+  if (G && G.mode === 'quiz' && G.ph === 'ask') {
+    let o = 0, x = 0;
+    bodies.forEach(lm => { const s = bodyPose(lm); if (s === 'up') o++; else if (s === 'cross') x++; });
+    pushH(G.oH, o, 7); pushH(G.xH, x, 7);
+    const mo = median(G.oH), mx = median(G.xH);
+    $('#qO').textContent = mo; $('#qX').textContent = mx;
+    const left = Math.max(0, G.end - now);
+    $('#gBar').style.width = (100 - left / 60).toFixed(1) + '%';
+    const pm = $('#pMsg'); pm.className = 'pmsg low'; pm.innerHTML = `<span class="num big">${Math.ceil(left / 1000)}</span>`;
+    if (!left) { G.o = mo; G.x = mx; G.ph = 'show'; const Q = G.qs[G.i]; G.log.push({ q: Q.q, a: Q.a, o: mo, x: mx }); renderPlay(); }
+  }
+  drawPlay(r);
+}
+function gymEnd(){
+  const all = store.get('ms-gym', {}), prev = all[PL.ex] || 0;
+  G.best = G.tot > prev && G.tot > 0;
+  if (G.best) { all[PL.ex] = G.tot; store.set('ms-gym', all); }
+  G.ph = 'done'; renderPlay();
+}
+// カメラの絵は鏡のように左右を反転して見せる。字は反転させないので、座標だけ反転して描く
+function drawPlay(r){
+  const cv = $('#pCv'), v = $('#camV');
+  if (!v.videoWidth) return;
+  if (cv.width !== v.videoWidth) { cv.width = v.videoWidth; cv.height = v.videoHeight; }
+  const x = cv.getContext('2d'), W = cv.width, H = cv.height, R = Math.max(6, W / 150);
+  x.clearRect(0, 0, W, H);
+  const X = p => (1 - p.x) * W, Y = p => p.y * H;
+  if (G && G.mode === 'gym' && G.ph !== 'ready') {
+    G.P.forEach(p => {
+      if (!p.lm || Date.now() - p.seen > 600) return;
+      const lm = p.lm;
+      x.lineWidth = R; x.strokeStyle = p.c; x.lineCap = 'round';
+      [[11, 13], [13, 15], [12, 14], [14, 16], [11, 12]].forEach(([a, b]) => { x.beginPath(); x.moveTo(X(lm[a]), Y(lm[a])); x.lineTo(X(lm[b]), Y(lm[b])); x.stroke(); });
+      const bx = X(lm[0]), by = Math.max(R * 6, Y(lm[0]) - Math.abs(lm[11].x - lm[12].x) * W * 1.1);
+      x.fillStyle = p.c; x.beginPath(); x.arc(bx, by, R * 5, 0, 7); x.fill();
+      x.fillStyle = '#0F1A16'; x.font = `700 ${Math.round(R * 5)}px "BIZ UDPGothic", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(String(p.n), bx, by + R * .3);
+    });
+  } else if (G && G.mode === 'quiz' && G.ph !== 'ready') {
+    visibleBodies(r).forEach(lm => {
+      const s = bodyPose(lm); if (s !== 'up' && s !== 'cross') return;
+      const bx = X(lm[0]), by = Math.max(R * 6, Y(lm[0]) - Math.abs(lm[11].x - lm[12].x) * W * 1.1);
+      x.fillStyle = s === 'up' ? '#3FBF7F' : '#FF7A7A'; x.beginPath(); x.arc(bx, by, R * 5, 0, 7); x.fill();
+      x.fillStyle = '#0F1A16'; x.font = `700 ${Math.round(R * 6)}px "BIZ UDPGothic", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(s === 'up' ? '○' : '×', bx, by + R * .3);
+    });
+  }
+}
+$('#pSide').addEventListener('click', async e => {
+  const xb = e.target.closest('[data-plx]'); if (xb) { PL.ex = xb.dataset.plx; G = null; return renderPlay(); }
+  const sb = e.target.closest('[data-pls]'); if (sb) { PL.sec = Number(sb.dataset.pls); G = null; return renderPlay(); }
+  const b = e.target.closest('[data-pl]'); if (!b) return;
+  const k = b.dataset.pl;
+  if (k === 'cam') { await camStart(); const pv = $('#pV'); pv.srcObject = C.st; pv.play().catch(() => {}); return renderPlay(); }
+  if (k === 'menu') { PL.mode = 'menu'; G = null; return renderPlay(); }
+  if (k === 'gym') { PL.mode = 'gym'; G = null; return renderPlay(); }
+  if (k === 'go') { PL.mode = 'gym'; G = { mode: 'gym', ph: 'run', P: [], tot: 0, ppl: 0, end: Date.now() + PL.sec * 1000 }; return renderPlay(); }
+  if (k === 'stop') return gymEnd();
+  if (k === 'qsave') { S.quiz = $('#qText').value.slice(0, 4000); store.set('ms-settings', S); const n = parseQuiz().length; return toast(n ? `問題を${n}問 保存しました` : '読める問題がありません。「問題｜○｜ひとこと」の形で書いてください'); }
+  if (k === 'quiz') { const qs = parseQuiz(); if (!qs.length) return toast('問題がありません。「クイズの問題を変える」で書いてください'); PL.mode = 'quiz'; G = { mode: 'quiz', qs, i: 0, ph: 'ready', log: [] }; return renderPlay(); }
+  if (k === 'ask') { G.ph = 'ask'; G.oH = []; G.xH = []; G.end = Date.now() + 6000; return renderPlay(); }
+  if (k === 'skip' || k === 'next') { G.i++; G.ph = 'ready'; return renderPlay(); }
+});
+
+/* 検査用：合成した骨格（正面を向いて座った人）で、姿勢の見分け方を確かめる */
+function bodyTest(){
+  const mk = (lw, rw) => { const a = Array.from({ length: 33 }, () => ({ x: .5, y: .5, visibility: .9 }));
+    a[0] = { x: .5, y: .30, visibility: .9 }; a[11] = { x: .58, y: .42, visibility: .9 }; a[12] = { x: .42, y: .42, visibility: .9 };
+    a[15] = { ...lw, visibility: .9 }; a[16] = { ...rw, visibility: .9 }; return a; };
+  const P = {
+    banzai: mk({ x: .60, y: .12 }, { x: .40, y: .12 }), down: mk({ x: .56, y: .66 }, { x: .44, y: .66 }),
+    side: mk({ x: .82, y: .43 }, { x: .18, y: .43 }), cross: mk({ x: .44, y: .50 }, { x: .56, y: .50 }),
+    oneArm: mk({ x: .62, y: .12 }, { x: .44, y: .66 }), chin: mk({ x: .52, y: .38 }, { x: .48, y: .38 })
+  };
+  const res = Object.fromEntries(Object.entries(P).map(([k, lm]) => [k, bodyPose(lm) || '-']));
+  // 2人が「下ろす→挙げる」を3回、途中で片腕だけの動きも混ぜる → 合計6回になるはず
+  const sv = screen, sg = G; screen = 'play'; PL.ex = 'banzai';
+  G = { mode: 'gym', ph: 'run', P: [], tot: 0, ppl: 0, end: Date.now() + 60000 };
+  const two = (a, b2) => ({ landmarks: [a.map(q => ({ ...q, x: q.x * .5 })), b2.map(q => ({ ...q, x: .5 + q.x * .5 }))] });
+  [['down','down'],['banzai','banzai'],['oneArm','banzai'],['down','down'],['banzai','oneArm'],['banzai','banzai'],['down','down'],['banzai','banzai'],['banzai','banzai']].forEach(([a, b2]) => playTick(two(P[a], P[b2])));
+  res.count = G.tot; res.each = G.P.map(q => q.n);
+  screen = sv; G = sg;
+  return res;
+}
 /* ---------- はじまり ---------- */
 setInterval(() => {
   if (M && M.running && !M.ended) {
@@ -4416,7 +4688,7 @@ else if (/^#join=/.test(location.hash)) { document.body.classList.add('phone'); 
 else { renderClock(); go(M && !M.ended ? 'run' : 'home'); if (M && !M.ended) renderRun(); }
 
 // 検査用（実際の声の代わりに字幕を流し込む）
-window.__ms = { get M(){ return M; }, get E(){ return E; }, get J(){ return J; }, go, finish, pack, unpack, summaryData, feed: addLine, setInterim: t => { interim = t; renderCap(); sendCap(); }, runAI, warmAI, aiSummary, makeTr, camTest, hvOpen, renderNotes, get C(){ return C; }, get hv(){ return hvS; } };
+window.__ms = { get M(){ return M; }, get E(){ return E; }, get J(){ return J; }, go, finish, pack, unpack, summaryData, feed: addLine, setInterim: t => { interim = t; renderCap(); sendCap(); }, runAI, warmAI, aiSummary, makeTr, camTest, hvOpen, renderNotes, get G(){ return G; }, bodyTest, get C(){ return C; }, get hv(){ return hvS; } };
 })();
 </script>
 </body>
