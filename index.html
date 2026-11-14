@@ -847,8 +847,8 @@ body.phone .bar-row .tr{height:22px}
     <header><h2 id="shDlgT">避難所の表示を変える</h2><button class="btn quiet" type="button" id="sClose">閉じる</button></header>
     <div class="grid">
       <div class="field full"><label for="sAja">新しいお知らせ（日本語で書く）</label><textarea class="in" id="sAja" maxlength="120" style="min-height:90px" placeholder="例：15時から、校庭で給水車が水を配ります"></textarea></div>
-      <div class="field full"><button class="btn" type="button" id="sTr">ほかのことばに訳す</button><span class="help" id="sTrNote">端末の中のAIが訳します。訳は必ず確かめてください</span></div>
-      <div class="field"><label for="sAez">やさしい にほんご</label><textarea class="in" id="sAez" maxlength="200" style="min-height:80px"></textarea></div>
+      <div class="field full"><button class="btn" type="button" id="sTr">繁體中文と English に訳す</button><span class="help" id="sTrNote">端末の中のAIが訳の下書きを作ります（30〜60秒）。訳は必ず確かめてください</span></div>
+      <div class="field"><label for="sAez">やさしい にほんご（人が書く・空欄なら日本語のまま）</label><textarea class="in" id="sAez" maxlength="200" style="min-height:80px" placeholder="例：15じから、こうていで みずを くばります"></textarea></div>
       <div class="field"><label for="sAzh">繁體中文</label><textarea class="in" id="sAzh" maxlength="200" style="min-height:80px"></textarea></div>
       <div class="field"><label for="sAen">English</label><textarea class="in" id="sAen" maxlength="240" style="min-height:80px"></textarea></div>
       <div class="field" style="justify-content:flex-end"><button class="btn main" type="button" id="sPost">掲示する</button></div>
@@ -857,7 +857,7 @@ body.phone .bar-row .tr{height:22px}
       <div class="field"><label for="sN">ここに避難している人（空欄なら出さない）</label><input class="in num" id="sN" inputmode="numeric" maxlength="5"></div>
       <div class="field"><label for="sSch">今日の予定（1行に1件）</label><textarea class="in" id="sSch"></textarea></div>
       <div class="field"><label for="sInf">くらしの案内（1行に1件）</label><textarea class="in" id="sInf"></textarea></div>
-      <div class="field full"><button class="btn main" type="button" id="sSave">名前・予定・案内を保存する</button><span class="help" id="sSaveNote">新しく書いた行は、保存するときに訳します</span></div>
+      <div class="field full"><button class="btn main" type="button" id="sSave">名前・予定・案内を保存する</button><span class="help" id="sSaveNote">新しく書いた行は、保存するときに繁體中文と English に訳します</span></div>
       <p class="help full">内容はこの画面の中（この端末のブラウザ）にだけ保存されます。カメラは使いません。<button class="btn quiet" type="button" id="sReset">見本に戻す</button></p>
     </div>
   </div>
@@ -4845,11 +4845,8 @@ function openShelter(){ shLang = 'ja'; shRotT = Date.now(); shPin = 0; renderShe
 // 訳す部品の準備（初回のダウンロード）で待たされ続けないよう、1つのことばにつき40秒で打ち切る
 function shTrans(x, lg){ return Promise.race([shTrans0(x, lg).catch(() => ''), new Promise(r => setTimeout(() => r(''), 40000))]); }
 async function shTrans0(x, lg){
-  if (lg === 'ez') {
-    if (!('LanguageModel' in self) || await LanguageModel.availability(AI_IO) !== 'available') return '';   // やさしい日本語は、AIの準備ができている端末だけ
-    const s = await LanguageModel.create({ ...AI_IO, initialPrompts: [{ role: 'system', content: '避難所のお知らせを「やさしい日本語」に書きかえます。短い文にし、むずかしい漢字はひらがなにし、単語のあいだを空けます。書きかえた文だけを出します。' }] });
-    try { const y = (await s.prompt(x)).trim(); return y.length <= x.length * 3 + 40 ? y : ''; } finally { s.destroy(); }
-  }
+  // やさしい日本語は、端末の中のAIでは意味の通らない文になることがあったため、人が書く（空欄なら日本語を出す）
+  if (lg === 'ez') return '';
   const k = lg === 'zh' ? 'zh-Hant' : 'en';
   if (!('Translator' in self) && !('LanguageModel' in self)) return '';
   if (!tr[k] && !(await makeTr(k))) return '';
@@ -4868,9 +4865,9 @@ $('#sList').addEventListener('click', e => { const b = e.target.closest('[data-s
 $('#sTr').onclick = async () => {
   const x = $('#sAja').value.trim(); if (!x) return toast('お知らせを日本語で書いてください');
   $('#sTr').disabled = true; $('#sTrNote').textContent = '端末の中で訳しています…';
-  for (const l of ['zh', 'en', 'ez']) { const y = await shTrans(x, l); if (y) $('#sA' + l).value = y; }
+  for (const l of ['zh', 'en']) { const y = await shTrans(x, l); if (y) $('#sA' + l).value = y; }
   $('#sTr').disabled = false;
-  $('#sTrNote').textContent = $('#sAzh').value && $('#sAen').value ? '訳を確かめて、まちがいがあれば直してから掲示してください' : 'この端末では訳せないことばがありました。空いた欄は日本語のまま出ます（手で書くこともできます）';
+  $('#sTrNote').textContent = $('#sAzh').value && $('#sAen').value ? '訳を確かめて、まちがいがあれば直してから掲示してください（例：「給水車」が「水車」になることがあります）' : 'この端末では訳せないことばがありました。空いた欄は日本語のまま出ます（手で書くこともできます）';
 };
 $('#sPost').onclick = () => {
   const ja = $('#sAja').value.trim().slice(0, 120); if (!ja) return toast('お知らせを日本語で書いてください');
@@ -4886,7 +4883,7 @@ async function shLines(text, old, doTr){
     const prev = old.find(o => o.ja === ja);
     if (prev) { out.push(prev); continue; }
     const o = { ja: ja.slice(0, 60) };
-    if (doTr) for (const l of ['zh', 'en', 'ez']) { const y = await shTrans(o.ja, l); if (y) o[l] = y.slice(0, 160); }
+    if (doTr) for (const l of ['zh', 'en']) { const y = await shTrans(o.ja, l); if (y) o[l] = y.slice(0, 160); }
     out.push(o);
   }
   // 時刻で始まる行は時刻の順にならべる（時刻のない行はそのままの位置で後ろへ）
