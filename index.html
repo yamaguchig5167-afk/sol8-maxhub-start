@@ -179,6 +179,22 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.6}
 .toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:16px 28px;border-radius:10px;font-size:21px;opacity:0;pointer-events:none;transition:.25s;z-index:30}
 .toast.on{opacity:1;transform:translateX(-50%)}
 
+/* 背の低い画面（ノートPCのブラウザなど） */
+@media (max-height:820px){
+  .bar{height:70px}
+  #run .center{gap:8px;padding:16px 24px;justify-content:flex-start;overflow:auto}
+  .timer{font-size:120px}
+  .center .topic{font-size:34px}
+  .center .pos,.status{font-size:19px}
+  .ctrls .btn{min-height:58px;min-width:0;font-size:19px;padding:0 16px}
+  .cap{height:132px}
+  .cap .line{font-size:24px}
+  .cap .line.old{font-size:18px}
+  .cap .tr{font-size:19px;min-height:26px}
+  .cap .btn{min-height:46px;font-size:17px}
+  .seg button{min-height:44px}
+  .col{padding:18px}
+}
 /* 中くらいの画面（ノートPC・タブレット） */
 @media (max-width:1500px){
   body{font-size:18px}
@@ -3454,14 +3470,17 @@ async function addLine(x){
 }
 async function makeTr(lg){
   if (!('Translator' in self)) { toast('このブラウザには翻訳の機能がありません（パソコン版 Chrome 138 以降で使えます）'); return false; }
-  try {
-    const o = { sourceLanguage: 'ja', targetLanguage: lg };
-    const a = await Translator.availability(o);
-    if (a === 'unavailable') { toast('この言語の翻訳は、この端末では使えません'); return false; }
-    if (a !== 'available') setMode('翻訳の準備をしています（初回だけ数分かかります）');
-    tr[lg] = await Translator.create({ ...o, monitor(m){ m.addEventListener('downloadprogress', ev => setMode(`翻訳の準備 ${Math.round(ev.loaded * 100)}%`)); } });
-    setMode(); return true;
-  } catch(e){ setMode(); toast('翻訳を準備できませんでした'); return false; }
+  const o = { sourceLanguage: 'ja', targetLanguage: lg };
+  // 初回のダウンロードは「押した直後」でないと許可されないので、確かめる前にすぐ作り始める
+  const p = Translator.create({ ...o, monitor(m){ m.addEventListener('downloadprogress', ev => setMode(`翻訳の準備 ${Math.round(ev.loaded * 100)}%（初回だけ）`)); } });
+  setMode('翻訳を準備しています');
+  try { tr[lg] = await p; setMode(); return true; }
+  catch(e){
+    setMode();
+    let av = ''; try { av = await Translator.availability(o); } catch(_){}
+    toast(av === 'unavailable' ? 'この言語の翻訳は、この端末では使えません' : '翻訳を準備できませんでした。もう一度押してください');
+    return false;
+  }
 }
 $('#langSeg').addEventListener('click', async e => {
   const b = e.target.closest('[data-lang]'); if (!b) return;
