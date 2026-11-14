@@ -3232,8 +3232,8 @@ function plainText(s){
   return t;
 }
 function fmtMin(sec){ const m = Math.round(sec/60); return sec < 30 ? '0分' : `${Math.max(1,m)}分`; }
-const JA = { sum: '要約（AIの下書き）', dec: '決まったこと', todo: '宿題', ag: '議題と時間', none: 'ありません', plan: '予定 ', min: '分' };
-const ZH = { sum: '摘要（AI 草稿）', dec: '已決定事項', todo: '待辦事項', ag: '議程與時間', none: '無', plan: '預定 ', min: '分鐘' };
+const JA = { sum: '要約（下書き）', dec: '決まったこと', todo: '宿題', ag: '議題と時間', none: 'ありません', plan: '予定 ', min: '分' };
+const ZH = { sum: '摘要（草稿）', dec: '已決定事項', todo: '待辦事項', ag: '議程與時間', none: '無', plan: '預定 ', min: '分鐘' };
 function sheetHtml(s, L = JA){
   const mm = sec => fmtMin(sec).replace('分', L.min);
   return `<h2>${esc(s.n)}</h2><div class="meta">${esc(s.d)}</div>
@@ -3492,7 +3492,13 @@ async function makeTr(lg){
 async function lmTranslator(lg){
   const sys = lg === 'en' ? 'Translate the Japanese text into natural English. Output only the translation.' : '請把日文翻譯成台灣使用的繁體中文。只輸出譯文，不要加說明。';
   const s = await LanguageModel.create({ expectedInputs: [{ type: 'text', languages: ['ja'] }], expectedOutputs: [{ type: 'text', languages: [lg === 'en' ? 'en' : 'ja'] }], initialPrompts: [{ role: 'system', content: sys }] });
-  return { async translate(x){ const c = await s.clone(); try { return (await c.prompt(x)).trim(); } finally { c.destroy(); } } };
+  // 訳ではなく説明文を書き始めることがあるので、長すぎる・日本語が残る答えは使わず原文のままにする
+  const ok = (x, y) => y && y.length <= x.length * (lg === 'en' ? 6 : 3) + 30 && !/[ぁ-んァ-ヶ]/.test(y) && !/\n\s*\n/.test(y);
+  return { async translate(x){
+    const c = await s.clone();
+    try { const y = (await c.prompt(lg === 'en' ? `Translate only the text inside 「」: 「${x}」` : `只翻譯「」裡的日文：「${x}」`)).trim().replace(/^「|」$/g, ''); return ok(x, y) ? y : x; }
+    finally { c.destroy(); }
+  } };
 }
 $('#langSeg').addEventListener('click', async e => {
   const b = e.target.closest('[data-lang]'); if (!b) return;
@@ -3600,13 +3606,27 @@ function renderCands(){
     : '<li class="empty" style="border:0;background:none">発言から、決まったこと・宿題の候補をここに出します。✓で残せます</li>';
 }
 async function aiSummary(){
+  const text = M.tx.map(t => t.x).join('\n').slice(-5000);
+  const clean = arr => arr.map(x => String(x).replace(/^[\s*・\-•‐\d.、)）]+/, '').trim()).filter(Boolean).slice(0, 4).map(x => x.slice(0, 70));
+  // 1) 端末の中のAI（Gemini Nano）に、発言にあることだけで要点を書かせる
+  if ('LanguageModel' in self) {
+    try {
+      if (await LanguageModel.availability(AI_IO) !== 'unavailable') {
+        const s = await LanguageModel.create({ ...AI_IO, initialPrompts: [{ role: 'system', content: 'あなたは会議の書記です。発言の書き起こしから会議の要点を3つまで、1つ40文字以内の日本語で書きます。発言に出てこない人名・数字・場所は書きません。決まっていないことを「決めた」と書きません。' }] });
+        const out = await s.prompt('発言の書き起こし：\n' + text, { responseConstraint: { type: 'array', maxItems: 3, items: { type: 'string' } } });
+        s.destroy();
+        const pts = clean(JSON.parse(out));
+        if (pts.length) return pts;
+      }
+    } catch(e){}
+  }
+  // 2) 要約の機能（Summarizer）
   if (!('Summarizer' in self)) return null;
   try {
     const o = { type: 'key-points', format: 'plain-text', length: 'short', expectedInputLanguages: ['ja'], outputLanguage: 'ja' };
     if (await Summarizer.availability(o) === 'unavailable') return null;
-    const s = await Summarizer.create({ ...o, sharedContext: '日本の会社の会議の書き起こし' });
-    const r = await s.summarize(M.tx.map(t => t.x).join('\n').slice(-6000)); s.destroy();
-    const pts = r.split('\n').map(x => x.replace(/^[\s*・\-•‐\d.、)）]+/, '').trim()).filter(Boolean).slice(0, 4).map(x => x.slice(0, 70));
+    const sm = await Summarizer.create({ ...o, sharedContext: '日本の会社の会議の書き起こし' });
+    const pts = clean((await sm.summarize(text)).split('\n')); sm.destroy();
     return pts.length ? pts : null;
   } catch(e){ return null; }
 }
