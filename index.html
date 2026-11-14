@@ -4169,7 +4169,7 @@ $('#join').addEventListener('click', e => {
    画像認識：MediaPipe Tasks Vision（Apache-2.0・Google）。部品とモデルは同じ場所の mp/ に置き、外から読み込まない */
 const MP = './mp/';
 const C = { on: false, busy: false, st: null, vis: null, fs: null, pose: null, ges: null, gesL: null, last: null,
-  od: null, odN: 0, odT: 0, tT: 0, tRes: null, tU: 0, play: null, gen: 0, timer: 0, fail: 0, ppl: 0, up: 0, pplH: [], upH: [], seen: 0, empty: Date.now(), arrive: false, warned: false,
+  od: null, odN: 0, odT: 0, tT: 0, tRes: null, tU: 0, play: null, bRes: null, odB: [], alt: false, gen: 0, timer: 0, fail: 0, ppl: 0, up: 0, pplH: [], upH: [], seen: 0, empty: Date.now(), arrive: false, warned: false,
   g: '', gT: 0, gSeen: 0, gCool: 0, px: .5, py: .5, use: null, logM: -1 };
 const mpUrl = f => new URL(MP + f, location.href).href;
 async function mpLoad(){
@@ -4184,10 +4184,28 @@ async function mpMake(Cls, file, opt){
 const POSE_OPT = mode => ({ runningMode: mode, numPoses: 12, minPoseDetectionConfidence: .3, minPosePresenceConfidence: .3, minTrackingConfidence: .3 });
 const OD_OPT = mode => ({ runningMode: mode, maxResults: 30, scoreThreshold: .35, categoryAllowlist: ['person'] });
 // 横を向いた人は骨格で取りこぼすので、人の数は「人の検出」と「骨格」の多いほうにする（座っていて重なる人を二重に数えないよう、大きく重なる枠は1人に）
-function countOD(r){
+function odBoxes(r){
   const bs = ((r && r.detections) || []).map(d => d.boundingBox).filter(Boolean), keep = [];
   bs.forEach(b => { if (!keep.some(k => { const x = Math.max(0, Math.min(b.originX + b.width, k.originX + k.width) - Math.max(b.originX, k.originX)), y = Math.max(0, Math.min(b.originY + b.height, k.originY + k.height) - Math.max(b.originY, k.originY)); return x * y > .6 * Math.min(b.width * b.height, k.width * k.height); })) keep.push(b); });
-  return keep.length;
+  return keep;
+}
+const countOD = r => odBoxes(r).length;
+// 人の枠ごとに切り出して骨格を探す（腕を組む・車いすなど、全体の絵では崩れやすい人を1人ずつ見直す）
+function poseBoxes(pose, src, w, h, boxes){
+  if (!tileCv) tileCv = document.createElement('canvas');
+  const out = [];
+  boxes.slice(0, 8).forEach(b => {
+    const mx = b.width * .25, my = b.height * .15;
+    const x0 = Math.max(0, b.originX - mx), y0 = Math.max(0, b.originY - my), x1 = Math.min(w, b.originX + b.width + mx), y1 = Math.min(h, b.originY + b.height + my);
+    const cw = Math.round(x1 - x0), ch = Math.round(y1 - y0); if (cw < 32 || ch < 32) return;
+    tileCv.width = cw; tileCv.height = ch;
+    tileCv.getContext('2d').drawImage(src, x0, y0, cw, ch, 0, 0, cw, ch);
+    const cx = (b.originX + b.width / 2 - x0) / cw;
+    const best = ((pose.detect(tileCv).landmarks) || []).filter(lm => Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) >= .4)
+      .sort((p, q) => Math.abs(bodyMid(p).x - cx) - Math.abs(bodyMid(q).x - cx))[0];   // 枠のまん中にいる人
+    if (best) out.push(best.map(p => ({ x: (x0 + p.x * cw) / w, y: (y0 + p.y * ch) / h, visibility: p.visibility })));
+  });
+  return { landmarks: out };
 }
 const GES_OPT = mode => ({ runningMode: mode, numHands: 2, minHandDetectionConfidence: .5, minHandPresenceConfidence: .5 });
 const vis = p => p && (p.visibility == null ? 1 : p.visibility);
@@ -4197,10 +4215,12 @@ function handUp(lm){
   const sy = (l.y + r.y) / 2, sw = Math.max(.02, Math.abs(l.x - r.x));
   return [15, 16].some(w => vis(lm[w]) > .3 && lm[w].y < n.y && lm[w].y < sy - sw * .6);
 }
+// 実写では、座った人のひざや脚を「もう1人」と見まちがえることがある（鼻が肩より下に来る）。鼻が肩より上にある人だけを数える
+const headUp = lm => lm[0].y < (lm[11].y + lm[12].y) / 2 - Math.abs(lm[11].x - lm[12].x) * .25;
 function countPose(r){
   let n = 0, u = 0;
   ((r && r.landmarks) || []).forEach(lm => {
-    if (Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) < .4) return;
+    if (Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) < .4 || !headUp(lm)) return;
     n++; if (handUp(lm)) u++;
   });
   return { n, u };
@@ -4222,14 +4242,27 @@ function poseTiled(pose, src, w, h){
     }
     (r.landmarks || []).forEach(lm => {
       const m = lm.map(p => ({ x: x + p.x * tw, y: y + p.y * th, visibility: p.visibility }));
-      if (Math.max(vis(m[0]), vis(m[11]), vis(m[12])) < .4) return;
+      if (Math.max(vis(m[0]), vis(m[11]), vis(m[12])) < .4 || !headUp(m)) return;
       const sw = Math.abs(m[11].x - m[12].x);
       if (k && sw > .14) return;                        // 大きく写る人は全体の画面で見つかっているので、区切った画面からは足さない
-      const dup = all.findIndex(o => Math.hypot(o[0].x - m[0].x, o[0].y - m[0].y) < Math.max(.05, .9 * Math.max(sw, Math.abs(o[11].x - o[12].x))));
-      if (dup < 0) all.push(m); else if (handUp(m) && !handUp(all[dup])) all[dup] = m;
+      addBody(all, m);
     });
   });
   return { landmarks: all };
+}
+// 同じ人：鼻か、両肩のまん中が近い（実写で鼻の位置がずれて同じ人を2人と数えたため、肩でも見る）。
+// 重なったら、会議の挙手では手を挙げている方を残す。体を動かす画面（byVis）では手首がはっきり見えている方を先に見る
+// （車いすの人で、骨格がずれて手首が見えず「挙げている」と出た方が残ったため）
+const bodyMid = q => ({ x: (q[11].x + q[12].x) / 2, y: (q[11].y + q[12].y) / 2 });
+const wristSeen = q => vis(q[15]) + vis(q[16]);
+function addBody(all, m, byVis){
+  const sw = Math.abs(m[11].x - m[12].x), b = bodyMid(m);
+  const dup = all.findIndex(o => { const th = Math.max(.05, .9 * Math.max(sw, Math.abs(o[11].x - o[12].x))), a = bodyMid(o);
+    return Math.hypot(o[0].x - m[0].x, o[0].y - m[0].y) < th || Math.hypot(a.x - b.x, a.y - b.y) < th; });
+  if (dup < 0) { all.push(m); return; }
+  const o = all[dup];
+  const d = wristSeen(m) - wristSeen(o);
+  if (byVis ? (d > .3 || (d > -.3 && handUp(m) && !handUp(o))) : (handUp(m) !== handUp(o) ? handUp(m) : d > .3)) all[dup] = m;
 }
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 const pushH = (a, x, n) => { a.push(x); if (a.length > n) a.shift(); };
@@ -4257,7 +4290,7 @@ async function camStart(){
   C.busy = false; $('#camBtn').disabled = false;
 }
 function camStop(){
-  C.on = false; C.gen++; clearTimeout(C.timer);
+  C.on = false; C.gen++; clearTimeout(C.timer); C.tRes = C.bRes = C.play = null;
   if (hvS) { hvClose(); toast('カメラが止まったので、挙手の数えを中止しました'); }
   if (C.st) C.st.getTracks().forEach(t => t.stop());
   C.st = null; $('#camV').srcObject = null; $('#camPrev').srcObject = null;
@@ -4277,7 +4310,7 @@ function camLoop(gen){
       workCv.getContext('2d').drawImage(v, 0, 0, ww, wh);
       const r = C.pose.detect(workCv); C.last = r;
       const c = countPose(r);
-      if (t0 - C.odT > 600) { C.odT = t0; C.odN = countOD(C.od.detectForVideo(v, t0)); }   // 人の検出は小さく写る人のために元の大きさで（0.6秒に1回）
+      if (t0 - C.odT > 600) { C.odT = t0; C.odB = odBoxes(C.od.detectForVideo(v, t0)); C.odN = C.odB.length; }   // 人の検出は小さく写る人のために元の大きさで（0.6秒に1回）
       let up = c.u;
       if (hvS && hvS.ph === 'count') {
         if (t0 - C.tT > 600) { C.tT = t0; C.tRes = poseTiled(C.pose, v, v.videoWidth, v.videoHeight); C.tU = countPose(C.tRes).u; }
@@ -4286,9 +4319,11 @@ function camLoop(gen){
       // 体を動かす画面では、腕を挙げた人が全体の絵で見落とされやすい（実写で5人中2人）。区切って探した結果の方が多ければそちらを使う（0.6秒に1回）
       let tN = 0; C.play = r;
       if (screen === 'play') {
-        if (t0 - C.tT > 600) { C.tT = t0; C.tRes = poseTiled(C.pose, v, v.videoWidth, v.videoHeight); }
-        tN = visibleBodies(C.tRes).length;
-        if (tN > visibleBodies(r).length) C.play = C.tRes;
+        // 区切って探す・人の枠ごとに探すを0.6秒ごとに交互に行い（負荷を半分に）、全体の絵の結果と合わせて1人ずつ見えやすい方を使う
+        if (t0 - C.tT > 600) { C.tT = t0; C.alt = !C.alt;
+          if (C.alt) C.tRes = poseTiled(C.pose, v, v.videoWidth, v.videoHeight); else C.bRes = poseBoxes(C.pose, v, v.videoWidth, v.videoHeight, C.odB || []); }
+        const all = []; [r, C.tRes, C.bRes].forEach(x => visibleBodies(x).forEach(m => addBody(all, m, true)));
+        tN = all.length; C.play = { landmarks: all };
       }
       pushH(C.pplH, Math.max(c.n, C.odN, tN), 9); pushH(C.upH, up, 5);
       C.ppl = median(C.pplH); C.up = median(C.upH);
@@ -4563,8 +4598,10 @@ async function camTest(urls){
     const im = new Image(); im.src = u; await im.decode();
     const c = countPose(pose.detect(im)), t = countPose(poseTiled(pose, im, im.naturalWidth, im.naturalHeight)), g = ges.recognize(im);
     const bp = visibleBodies(pose.detect(im)).map(bodyPose).join(',');
-    const tb = visibleBodies(poseTiled(pose, im, im.naturalWidth, im.naturalHeight)).sort((p, q) => p[0].x - q[0].x).map(lm => bodyPose(lm) || ('?' + [0, 11, 12, 15, 16].map(i => lm[i].x.toFixed(2) + '/' + lm[i].y.toFixed(2) + '/' + vis(lm[i]).toFixed(1)).join(' '))).join(',');
-    out.push({ body: bp, tbody: tb, pose: c.n, tiled: t.n + '/' + t.u, od: countOD(od.detect(im)), up: c.u, ges: (g.gestures || []).map(x => x[0].categoryName + ':' + x[0].score.toFixed(2)) });
+    const ob = odBoxes(od.detect(im)), bx = poseBoxes(pose, im, im.naturalWidth, im.naturalHeight, ob);
+    const xb = visibleBodies(bx).sort((p, q) => p[0].x - q[0].x).map(lm => bodyPose(lm) || '?').join(',');
+    const tb = visibleBodies(poseTiled(pose, im, im.naturalWidth, im.naturalHeight)).sort((p, q) => p[0].x - q[0].x).map(lm => (bodyPose(lm) || '?') + ' ' + [0, 11, 12, 13, 14, 15, 16].map(i => lm[i].x.toFixed(2) + '/' + lm[i].y.toFixed(2) + '/' + vis(lm[i]).toFixed(1)).join(' ')).join(' | ');
+    out.push({ body: bp, boxes: xb, tbody: tb, pose: c.n, tiled: t.n + '/' + t.u, od: countOD(od.detect(im)), up: c.u, ges: (g.gestures || []).map(x => x[0].categoryName + ':' + x[0].score.toFixed(2)) });
   }
   pose.close(); ges.close(); od.close();
   return out;
@@ -4579,7 +4616,12 @@ function bodyPose(lm){
   const bothUp = lw.y < n.y && rw.y < n.y;
   const bothDown = lw.y > sy + sw * .5 && rw.y > sy + sw * .5;
   const spread = Math.abs(lw.x - rw.x);
-  const side = Math.abs(lw.y - sy) < sw * .7 && Math.abs(rw.y - sy) < sw * .7 && spread > sw * 2.2;
+  // 腕を横にひらく：手首が肩の高さで大きく広がる。実写で隣の人と腕が重なると手首が肘の近くに寄って見えるので、
+  // 肘も肩の高さにあり、手首がそれぞれ肩の外側にあるときもひらいたとみなす
+  const le = lm[13], re = lm[14], dir = Math.sign(l.x - r.x);
+  const atS = w => Math.abs(w.y - sy) < sw * .7;
+  const side = atS(lw) && atS(rw) && (spread > sw * 2.2
+    || (vis(le) >= .3 && vis(re) >= .3 && Math.abs(le.y - sy) < sw * .8 && Math.abs(re.y - sy) < sw * .8 && (lw.x - l.x) * dir > 0 && (r.x - rw.x) * dir > 0));
   // 腕の交差：手首の左右の並びが、肩の並びと逆になっていて、手首が胸の高さにある
   // 実写では、交差した手首が肩の内側で寄り合って見えることが多い（左右が入れ替わらない）。胸の高さで手首が近いときも×とみなす
   const inX = w => w.x > Math.min(l.x, r.x) - sw * .15 && w.x < Math.max(l.x, r.x) + sw * .15;
@@ -4587,7 +4629,7 @@ function bodyPose(lm){
     || (spread < sw * .6 && inX(lw) && inX(rw) && (lw.y + rw.y) / 2 > sy - sw * .45 && [lw, rw].every(w => w.y < sy + sw * 1.5));
   return bothUp ? 'up' : side ? 'side' : crossed ? 'cross' : bothDown ? 'down' : '';
 }
-const visibleBodies = r => ((r && r.landmarks) || []).filter(lm => Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) >= .4);
+const visibleBodies = r => ((r && r.landmarks) || []).filter(lm => Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) >= .4 && headUp(lm));
 
 const EX = {
   banzai: { name: 'バンザイ', how: '両手をまっすぐ上に挙げて、ひざに下ろす', top: 'up', base: 'down' },
@@ -4601,6 +4643,7 @@ function parseQuiz(){
     .map(a => ({ q: a[0].slice(0, 60), a: /^[○〇]$/.test(a[1]) ? 'o' : 'x', e: (a[2] || '').slice(0, 80) })).slice(0, 30);
 }
 function openPlay(){
+  C.tRes = C.bRes = C.play = null;   // 前の画面で探した結果を持ち込まない
   PL.mode = 'menu'; G = null;
   const pv = $('#pV'); pv.srcObject = C.on ? C.st : null; if (C.on) pv.play().catch(() => {});
   renderPlay();
@@ -4759,7 +4802,7 @@ function bodyTest(){
   const P = {
     banzai: mk({ x: .60, y: .12 }, { x: .40, y: .12 }), down: mk({ x: .56, y: .66 }, { x: .44, y: .66 }),
     side: mk({ x: .82, y: .43 }, { x: .18, y: .43 }), cross: mk({ x: .44, y: .50 }, { x: .56, y: .50 }),
-    oneArm: mk({ x: .62, y: .12 }, { x: .44, y: .66 }), chin: mk({ x: .52, y: .33 }, { x: .48, y: .33 }), xReal: mk({ x: .56, y: .43 }, { x: .51, y: .38 }), clasp: mk({ x: .52, y: .68 }, { x: .48, y: .68 })
+    oneArm: mk({ x: .62, y: .12 }, { x: .44, y: .66 }), chin: mk({ x: .52, y: .33 }, { x: .48, y: .33 }), xReal: mk({ x: .56, y: .43 }, { x: .51, y: .38 }), clasp: mk({ x: .52, y: .68 }, { x: .48, y: .68 }), sideReal: (() => { const a = mk({ x: .66, y: .44 }, { x: .34, y: .43 }); a[13] = { x: .66, y: .43, visibility: .9 }; a[14] = { x: .34, y: .43, visibility: .9 }; return a; })(), shrug: (() => { const a = mk({ x: .62, y: .42 }, { x: .38, y: .42 }); a[13] = { x: .62, y: .62, visibility: .9 }; a[14] = { x: .38, y: .62, visibility: .9 }; return a; })()
   };
   const res = Object.fromEntries(Object.entries(P).map(([k, lm]) => [k, bodyPose(lm) || '-']));
   // 2人が「下ろす→挙げる」を3回、途中で片腕だけの動きも混ぜる → 合計6回になるはず
