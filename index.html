@@ -3493,7 +3493,7 @@ $('#pick').addEventListener('click', e => {
 });
 
 /* ---------- 端末の中のAI（Chrome の Gemini Nano）。使えない端末では言葉のきまりで拾う ---------- */
-const AI_SYS = 'あなたは日本の会社の会議の書記です。発言の書き起こしから「会議で決まったこと」と「宿題（だれが・何を・いつまでに）」だけを抜き出します。発言にはっきり出たものだけを書き、推測で足しません。なければ空の配列にします。各項目は30文字以内の短い日本語にします。だれがが分からないときは「未定」、期限が分からないときは「次の会議まで」とします。';
+const AI_SYS = 'あなたは日本の会社の会議の書記です。発言の書き起こしから「会議で決まったこと（合意した内容だけ。検討中のものは入れない）」と「宿題（だれが・何を・いつまでに）」だけを抜き出します。発言にはっきり出たものだけを書き、推測で足しません。なければ空の配列にします。各項目は30文字以内の短い日本語にします。だれがが分からないときは「未定」、期限が分からないときは「次の会議まで」とします。';
 const AI_SCHEMA = { type: 'object', required: ['decisions', 'todos'], properties: {
   decisions: { type: 'array', maxItems: 3, items: { type: 'string' } },
   todos: { type: 'array', maxItems: 3, items: { type: 'object', required: ['who', 'what', 'due'], properties: { who: { type: 'string' }, what: { type: 'string' }, due: { type: 'string' } } } }
@@ -3522,7 +3522,7 @@ async function runAI(mode){
   if (!mode && tx.length < 4) return;
   aiBusy = true; const upto = M.tx.length, topic = M.a[tx[tx.length - 1].i] ? M.a[tx[tx.length - 1].i].t : '';
   aiState('（AIが読んでいます…）'); $('#aiBox').hidden = false;
-  if (mode === 'btn') await warmAI();
+  await warmAI();
   let f = null;
   if (lm) {
     try {
@@ -3557,7 +3557,7 @@ function addCands(f){
   (f.decisions || []).forEach(x => { x = String(x).trim().slice(0, 60); if (x && !have.has(x)) { M.cand.push({ k: 'd', x, by: f.by }); have.add(x); } });
   (f.todos || []).forEach(o => {
     const x = String(o && o.what || '').trim().slice(0, 60);
-    if (x && !have.has(x)) { M.cand.push({ k: 't', x, w: String(o.who || '').trim().slice(0, 12) || '未定', d: String(o.due || '').trim().slice(0, 12) || '次の会議まで', by: f.by }); have.add(x); }
+    if (x && !have.has(x)) { M.cand.push({ k: 't', x, w: String(o.who || '').trim().replace(/(さん|様|氏)$/, '').slice(0, 12) || '未定', d: String(o.due || '').trim().slice(0, 12) || '次の会議まで', by: f.by }); have.add(x); }
   });
   M.cand = M.cand.slice(-8); save(); renderNotes();
 }
