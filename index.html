@@ -714,7 +714,7 @@ body.phone .bar-row .tr{height:22px}
   <div class="big" id="hvBig"><b class="num" id="hvNum">0</b><span id="hvSub"></span></div>
   <div class="tr" id="hvTr"><i id="hvBar"></i></div>
   <div class="res" id="hvRes"></div>
-  <p class="note" id="hvNote">カメラに映った手を数えます。だれの手かは見分けません。数がずれたら ＋ − で直せます。</p>
+  <p class="note" id="hvNote">カメラに映った手を数えます。だれの手かは見分けず、映像も残しません。残るのは数えた人数だけです。数がずれたら ＋ − で直せます。</p>
   <div class="acts" id="hvActs"></div>
   </div>
   <div class="camview" id="hvView"><video id="hvV" muted playsinline></video><canvas id="hvCv"></canvas></div>
@@ -735,6 +735,7 @@ body.phone .bar-row .tr{height:22px}
         <label>この部屋の使われ方（直近7日・1時間ごとの最大人数）</label>
         <div class="usage" id="camUse"></div>
         <p class="help" id="camUseSum"></p>
+        <button class="btn quiet" type="button" id="camUseDel" style="align-self:flex-start">記録を消す</button>
       </div>
     </div>
   </div>
@@ -3094,7 +3095,7 @@ const DEFAULTS = {
   spot: '正面駐車場（北側）',
   tel: '総務 内線 101\n消防・救急 119',
   idle: 5, beep: true,
-  camWake: true, camGest: true, camLog: true, camId: ''
+  camWake: true, camGest: true, camLog: false, camId: '', camSeen: false
 };
 let S = Object.assign({}, DEFAULTS, store.get('ms-settings', {}));
 
@@ -3210,7 +3211,7 @@ $('#addTopic').onclick = () => {
 $('#startBtn').onclick = () => {
   const a = draft.a.map((x,i) => ({ t: x.t.trim() || `議題${i+1}`, m: x.m, el: 0 }));
   M = { name: draft.name.trim() || '会議', a, cur: 0, running: true, last: Date.now(), start: Date.now(), dec: [], todo: [], ended: false, rang: {}, tx: [], cand: [], aiFrom: 0, sum: null };
-  lines = []; interim = ''; PH = [];
+  lines = []; interim = ''; PH = []; clearShot();
   draft = null; save(); go('run'); renderRun();
 };
 
@@ -3393,7 +3394,7 @@ async function finish(){
 $('#backRun').onclick = () => { M.ended = false; M.endAt = null; save(); go('run'); renderRun(); };
 $('#copyBtn').onclick = () => copy(plainText(summaryData()));
 $('#printBtn').onclick = () => window.print();
-$('#doneBtn').onclick = () => { PH = []; M = null; save(); go('home'); };
+$('#doneBtn').onclick = () => { PH = []; clearShot(); M = null; save(); go('home'); };
 async function copy(t){
   try { await navigator.clipboard.writeText(t); toast('コピーしました'); }
   catch(e){ const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('コピーしました'); } catch(e2){ toast('コピーできませんでした'); } ta.remove(); }
@@ -4004,7 +4005,7 @@ $('#join').addEventListener('click', e => {
    画像認識：MediaPipe Tasks Vision（Apache-2.0・Google）。部品とモデルは同じ場所の mp/ に置き、外から読み込まない */
 const MP = './mp/';
 const C = { on: false, busy: false, st: null, vis: null, fs: null, pose: null, ges: null, gesL: null, last: null,
-  od: null, odN: 0, odT: 0, ppl: 0, up: 0, pplH: [], upH: [], seen: 0, empty: Date.now(), arrive: false, warned: false,
+  od: null, odN: 0, odT: 0, tT: 0, tRes: null, tU: 0, gen: 0, timer: 0, fail: 0, ppl: 0, up: 0, pplH: [], upH: [], seen: 0, empty: Date.now(), arrive: false, warned: false,
   g: '', gT: 0, gSeen: 0, gCool: 0, px: .5, py: .5, use: null, logM: -1 };
 const mpUrl = f => new URL(MP + f, location.href).href;
 async function mpLoad(){
@@ -4083,41 +4084,57 @@ async function camStart(){
     if (!C.pose) C.pose = await mpMake(C.vis.PoseLandmarker, 'pose_landmarker_full.task', POSE_OPT('IMAGE'));   // 動画の追跡モードは人を取りこぼすので、毎回まっさらに探す
     if (!C.od) C.od = await mpMake(C.vis.ObjectDetector, 'efficientdet_lite0.tflite', OD_OPT('VIDEO'));
     C.on = true; C.empty = Date.now(); C.pplH = []; C.upH = [];
-    camLoop(); camUI(); toast('カメラを使っています。映像は保存も送信もしません');
+    C.gen++; C.fail = 0; camLoop(C.gen); camUI();
+    if (!S.camSeen) { S.camSeen = true; store.set('ms-settings', S); openCam(); toast('カメラで使う機能を選んでください'); }
+    else toast('カメラを使っています。映像は保存も送信もしません');
   } catch(e){
     camStop(); toast(e && e.name === 'NotAllowedError' ? 'カメラの使用が許可されませんでした。ブラウザの設定で許可してください' : 'カメラを使えませんでした（' + (e && e.name || 'エラー') + '）');
   }
   C.busy = false; $('#camBtn').disabled = false;
 }
 function camStop(){
-  C.on = false;
+  C.on = false; C.gen++; clearTimeout(C.timer);
+  if (hvS) { hvClose(); toast('カメラが止まったので、挙手の数えを中止しました'); }
   if (C.st) C.st.getTracks().forEach(t => t.stop());
   C.st = null; $('#camV').srcObject = null; $('#camPrev').srcObject = null;
   C.ppl = C.up = 0; holdOff(); $('#ptr').classList.remove('on'); camUI();
 }
-const needGes = () => C.on && S.camGest && screen === 'run' && M && !M.ended && !hvS && !$('.modal.on');
-function camLoop(){
-  if (!C.on) return;
+const needGes = () => C.on && S.camGest && screen === 'run' && M && !M.ended && !hvS && !$('.modal.on') && !$('#stage').classList.contains('on') && !$('#pick').classList.contains('on') && document.visibilityState === 'visible';
+// 推論は 960px 幅に縮めた絵で行う（MAXHUB の PC の負荷を抑える）。区切って探すのは挙手を数えている間だけ、0.6秒に1回まで
+let workCv = null;
+function camLoop(gen){
+  if (!C.on || gen !== C.gen) return;
   const v = $('#camV'), t0 = performance.now();
   if (v.readyState >= 2 && v.videoWidth) {
     try {
-      const r = C.pose.detect(v); C.last = r;
+      if (!workCv) workCv = document.createElement('canvas');
+      const ww = Math.min(960, v.videoWidth), wh = Math.round(v.videoHeight * ww / v.videoWidth);
+      if (workCv.width !== ww) { workCv.width = ww; workCv.height = wh; }
+      workCv.getContext('2d').drawImage(v, 0, 0, ww, wh);
+      const r = C.pose.detect(workCv); C.last = r;
       const c = countPose(r);
-      if (t0 - C.odT > 600) { C.odT = t0; C.odN = countOD(C.od.detectForVideo(v, t0)); }
-      // 挙手を数えているあいだだけ、区切って拡大して探す（会場の後ろの席の手も拾う）
+      if (t0 - C.odT > 600) { C.odT = t0; C.odN = countOD(C.od.detectForVideo(v, t0)); }   // 人の検出は小さく写る人のために元の大きさで（0.6秒に1回）
       let up = c.u;
-      if (hvS && hvS.ph === 'count') { const t = poseTiled(C.pose, v, v.videoWidth, v.videoHeight); up = countPose(t).u; drawSkel($('#hvCv'), t); }
-      else if (hvS) drawSkel($('#hvCv'), r);
+      if (hvS && hvS.ph === 'count') {
+        if (t0 - C.tT > 600) { C.tT = t0; C.tRes = poseTiled(C.pose, v, v.videoWidth, v.videoHeight); C.tU = countPose(C.tRes).u; }
+        up = C.tU; drawSkel($('#hvCv'), C.tRes);
+      } else if (hvS) drawSkel($('#hvCv'), r);
       pushH(C.pplH, Math.max(c.n, C.odN), 9); pushH(C.upH, up, 5);
       C.ppl = median(C.pplH); C.up = median(C.upH);
+      C.fail = 0;
+    } catch(e){
+      if (++C.fail >= 5) { camStop(); toast('画像認識が止まりました。もう一度「カメラを使う」を押してください'); return; }
+    }
+    try {
       presence();
       if (needGes()) gesture(v, t0); else { if (C.g) { C.g = ''; holdOff(); } $('#ptr').classList.remove('on'); }
       if ($('#camDlg').classList.contains('on')) drawPrev();
       if (hvS && hvS.ph === 'count') hvTick();
     } catch(e){}
   }
-  const busy = needGes() || hvS || $('#camDlg').classList.contains('on');
-  setTimeout(camLoop, Math.max(20, (busy ? 70 : 300) - (performance.now() - t0)));
+  const took = performance.now() - t0, busy = needGes() || hvS || $('#camDlg').classList.contains('on');
+  // 処理が重いときは、そのぶん間をあけて画面の操作を止めない
+  C.timer = setTimeout(() => camLoop(gen), Math.max(busy ? 100 : 300, took * 1.5) - Math.min(took, 80));
 }
 
 /* 人が来た・いなくなった */
@@ -4139,7 +4156,7 @@ function presence(){
   camUI();
 }
 function camUI(){
-  $('#camPill').hidden = !C.on;
+  $('#camPill').hidden = !C.on || !!hvS;
   if (C.on) $('#camPillTx').textContent = `カメラ：${C.ppl}人`;
   $('#camBtn').lastChild.textContent = C.on ? 'カメラの設定' : 'カメラを使う';
   $('#camRow').hidden = !C.on;
@@ -4157,10 +4174,18 @@ function logUse(){
   const a = C.use[k] || (C.use[k] = Array(24).fill(0));
   if (C.ppl > a[h]) a[h] = Math.min(99, C.ppl);
   const m = Math.floor(Date.now() / 60000);
-  if (m !== C.logM) { C.logM = m; const ks = Object.keys(C.use).sort(); while (ks.length > 14) delete C.use[ks.shift()]; store.set('ms-usage', C.use); }
+  if (m !== C.logM) { C.logM = m; pruneUse(); store.set('ms-usage', C.use); }
+}
+// 今日から数えて14日より前の記録は消す（記録をやめていても、設定を開いたときに消す）
+function pruneUse(){
+  if (!C.use) C.use = store.get('ms-usage', {});
+  const lim = new Date(); lim.setDate(lim.getDate() - 13); const lk = dkey(lim);
+  let ch = false; Object.keys(C.use).forEach(k => { if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || k < lk) { delete C.use[k]; ch = true; } });
+  if (ch) store.set('ms-usage', C.use);
 }
 function renderUse(){
-  const U = C.use || store.get('ms-usage', {}), H = [8,9,10,11,12,13,14,15,16,17,18,19,20];
+  pruneUse();
+  const U = C.use, H = [8,9,10,11,12,13,14,15,16,17,18,19,20];
   const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d; });
   const mx = Math.max(1, ...days.flatMap(d => (U[dkey(d)] || []).slice(8, 21)));
   let used = 0, top = 0;
@@ -4185,7 +4210,7 @@ function gesture(v, ts){
   }
   const r = C.ges.recognizeForVideo(v, ts);
   let best = null;
-  (r.gestures || []).forEach((g, i) => { const c = g[0]; if (c && c.score > .6 && c.categoryName !== 'None' && (!best || c.score > best.s)) best = { n: c.categoryName, s: c.score, lm: r.landmarks[i] }; });
+  (r.gestures || []).forEach((g, i) => { const c = g[0]; if (c && c.score > .65 && c.categoryName !== 'None' && (!best || c.score > best.s)) best = { n: c.categoryName, s: c.score, lm: r.landmarks[i] }; });
   // ☝ 人さし指の先を、画面の上のポインターにする（カメラの中央の範囲を画面全体に広げる）
   if (best && best.n === 'Pointing_Up') {
     const tip = best.lm[8], fx = Math.min(1, Math.max(0, ((1 - tip.x) - .2) / .6)), fy = Math.min(1, Math.max(0, (tip.y - .1) / .55));
@@ -4197,7 +4222,7 @@ function gesture(v, ts){
   if (!name) { if (C.g && now - C.gSeen > 350) { C.g = ''; holdOff(); } return; }
   C.gSeen = now;
   if (name !== C.g) { C.g = name; C.gT = now; }
-  const k = Math.min(1, (now - C.gT) / 1000);
+  const k = Math.min(1, (now - C.gT) / 1500);   // 誤って動かないよう、1.5秒同じ形を保ったときだけ
   holdOn(GMAP[name][0], k);
   if (k >= 1) { C.g = ''; C.gCool = now + 2500; holdOff(); GMAP[name][1](); toast('手の形で操作：' + GMAP[name][0]); }
 }
@@ -4213,10 +4238,10 @@ function hvOpen(mode){
   $('#hvQ').hidden = mode === 'ev';
   if (mode !== 'ev') { $('#hvQIn').value = ''; }
   const hv = $('#hvV'); hv.srcObject = C.st; hv.play().catch(() => {});
-  $('#hv').classList.add('on'); hvRender();
+  $('#hv').classList.add('on'); hvRender(); camUI();
   if (mode !== 'ev') $('#hvQIn').focus();
 }
-function hvClose(){ hvS = null; $('#hv').classList.remove('on'); $('#hvV').srcObject = null; }
+function hvClose(){ hvS = null; $('#hv').classList.remove('on'); $('#hvV').srcObject = null; camUI(); }
 function hvNext(){
   if (!hvS) return;
   hvS.i++;
@@ -4308,6 +4333,7 @@ function drawSkel(cv, res){
     [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16]].forEach(([a, b]) => { x.beginPath(); x.moveTo(lm[a].x * W, lm[a].y * H); x.lineTo(lm[b].x * W, lm[b].y * H); x.stroke(); });
   });
 }
+$('#camUseDel').onclick = () => { C.use = {}; store.del('ms-usage'); renderUse(); toast('部屋の使われ方の記録を消しました'); };
 $('#camClose').onclick = () => { $('#camDlg').classList.remove('on'); $('#camPrev').srcObject = null; };
 $('#camStop').onclick = () => { $('#camDlg').classList.remove('on'); camStop(); toast('カメラを止めました'); };
 $('#camSel').onchange = async e => { S.camId = e.target.value; store.set('ms-settings', S); $('#camDlg').classList.remove('on'); camStop(); await camStart(); };
@@ -4328,7 +4354,8 @@ function takeShot(){
 const IMG_IO = { expectedInputs: [{ type: 'text', languages: ['ja'] }, { type: 'image' }], expectedOutputs: [{ type: 'text', languages: ['ja'] }] };
 $('#shotBtn').onclick = takeShot;
 $('#shotRetake').onclick = takeShot;
-$('#shotClose').onclick = () => $('#shotDlg').classList.remove('on');
+function clearShot(){ shotCv = null; $('#shotImg').removeAttribute('src'); $('#shotDlg').classList.remove('on'); }
+$('#shotClose').onclick = clearShot;
 $('#shotRead').onclick = async () => {
   if (!M || !shotCv) return;
   $('#shotRead').disabled = true;
@@ -4345,12 +4372,12 @@ $('#shotRead').onclick = async () => {
     toast(n ? `写真から候補を${n}件拾いました。✓で残せます` : '写真から決まったこと・宿題は見つかりませんでした。写真はまとめに残しました');
   } catch(e){}
   if (!ok) toast('この端末のAIは写真を読めませんでした。写真はまとめに残しました');
-  $('#shotDlg').classList.remove('on');
+  clearShot();
 };
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (hvS) hvClose();
-  $('#camDlg').classList.remove('on'); $('#shotDlg').classList.remove('on');
+  $('#camDlg').classList.remove('on'); if ($('#shotDlg').classList.contains('on')) clearShot();
 });
 
 /* 検査用：写真で人数・挙手・手の形を判定する（本番と同じ部品と式） */
