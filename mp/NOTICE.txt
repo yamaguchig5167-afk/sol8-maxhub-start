@@ -1,0 +1,4 @@
+mp/ の中身（vision_bundle.mjs・wasm/・*.task・*.tflite）は Google の MediaPipe Tasks Vision 1.2.0 と公開モデルです。
+ライセンス：Apache License 2.0（全文は LICENSE-Apache-2.0.txt）
+出典：https://www.npmjs.com/package/@mediapipe/tasks-vision ／ https://storage.googleapis.com/mediapipe-models/
+手を加えずにそのまま置いています。
