@@ -4169,7 +4169,7 @@ $('#join').addEventListener('click', e => {
    画像認識：MediaPipe Tasks Vision（Apache-2.0・Google）。部品とモデルは同じ場所の mp/ に置き、外から読み込まない */
 const MP = './mp/';
 const C = { on: false, busy: false, st: null, vis: null, fs: null, pose: null, ges: null, gesL: null, last: null,
-  od: null, odN: 0, odT: 0, tT: 0, tRes: null, tU: 0, play: null, bRes: null, odB: [], alt: false, gen: 0, timer: 0, fail: 0, ppl: 0, up: 0, pplH: [], upH: [], seen: 0, empty: Date.now(), arrive: false, warned: false,
+  od: null, odN: 0, odT: 0, tT: 0, tRes: null, tU: 0, play: null, bRes: null, odB: [], alt: false, job: null, tAt: 0, bAt: 0, gen: 0, timer: 0, fail: 0, ppl: 0, up: 0, pplH: [], upH: [], seen: 0, empty: Date.now(), arrive: false, warned: false,
   g: '', gT: 0, gSeen: 0, gCool: 0, px: .5, py: .5, use: null, logM: -1 };
 const mpUrl = f => new URL(MP + f, location.href).href;
 async function mpLoad(){
@@ -4191,22 +4191,6 @@ function odBoxes(r){
 }
 const countOD = r => odBoxes(r).length;
 // 人の枠ごとに切り出して骨格を探す（腕を組む・車いすなど、全体の絵では崩れやすい人を1人ずつ見直す）
-function poseBoxes(pose, src, w, h, boxes){
-  if (!tileCv) tileCv = document.createElement('canvas');
-  const out = [];
-  boxes.slice(0, 8).forEach(b => {
-    const mx = b.width * .25, my = b.height * .15;
-    const x0 = Math.max(0, b.originX - mx), y0 = Math.max(0, b.originY - my), x1 = Math.min(w, b.originX + b.width + mx), y1 = Math.min(h, b.originY + b.height + my);
-    const cw = Math.round(x1 - x0), ch = Math.round(y1 - y0); if (cw < 32 || ch < 32) return;
-    tileCv.width = cw; tileCv.height = ch;
-    tileCv.getContext('2d').drawImage(src, x0, y0, cw, ch, 0, 0, cw, ch);
-    const cx = (b.originX + b.width / 2 - x0) / cw;
-    const best = ((pose.detect(tileCv).landmarks) || []).filter(lm => Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) >= .4)
-      .sort((p, q) => Math.abs(bodyMid(p).x - cx) - Math.abs(bodyMid(q).x - cx))[0];   // 枠のまん中にいる人
-    if (best) out.push(best.map(p => ({ x: (x0 + p.x * cw) / w, y: (y0 + p.y * ch) / h, visibility: p.visibility })));
-  });
-  return { landmarks: out };
-}
 const GES_OPT = mode => ({ runningMode: mode, numHands: 2, minHandDetectionConfidence: .5, minHandPresenceConfidence: .5 });
 const vis = p => p && (p.visibility == null ? 1 : p.visibility);
 // 手が挙がっている：手首が鼻より上、かつ肩より「肩幅の0.6倍」以上高い
@@ -4228,41 +4212,77 @@ function countPose(r){
 // 会場のように人が小さく写るときは、画面を重ねながら6つに区切って拡大して探し、同じ人（鼻の位置が近い）は1人にまとめる
 const TILES = [[0,0,1,1],[0,0,.5,.6],[.25,0,.5,.6],[.5,0,.5,.6],[0,.4,.5,.6],[.25,.4,.5,.6],[.5,.4,.5,.6]];
 let tileCv = null;
-function poseTiled(pose, src, w, h){
+// 区切る・人の枠ごとに切り出すときの区画（0〜1の割合）。人の枠はまわりに余白をつける
+function tileRects(){ return TILES.map(([x, y, tw, th]) => ({ x, y, tw, th })); }
+function boxRects(boxes, w, h){
+  return (boxes || []).slice(0, 8).map(b => {
+    const mx = b.width * .25, my = b.height * .15;
+    const x0 = Math.max(0, b.originX - mx), y0 = Math.max(0, b.originY - my), x1 = Math.min(w, b.originX + b.width + mx), y1 = Math.min(h, b.originY + b.height + my);
+    return { x: x0 / w, y: y0 / h, tw: (x1 - x0) / w, th: (y1 - y0) / h, cx: (b.originX + b.width / 2) / w };
+  }).filter(R => R.tw * w >= 32 && R.th * h >= 32);
+}
+// 1区画ぶんを探して all に足す。kind='tile'：同じ人はまとめる／'box'：枠のまん中にいる人を1人だけ取る
+function rectStep(pose, src, w, h, R, k, kind, all){
   if (!tileCv) tileCv = document.createElement('canvas');
-  const all = [];
-  TILES.forEach(([x, y, tw, th], k) => {
-    let r;
-    if (!k) r = pose.detect(src);
-    else {
-      const cw = Math.round(w * tw), ch = Math.round(h * th);
-      tileCv.width = cw; tileCv.height = ch;
-      tileCv.getContext('2d').drawImage(src, x * w, y * h, cw, ch, 0, 0, cw, ch);
-      r = pose.detect(tileCv);
-    }
-    (r.landmarks || []).forEach(lm => {
-      const m = lm.map(p => ({ x: x + p.x * tw, y: y + p.y * th, visibility: p.visibility }));
-      if (Math.max(vis(m[0]), vis(m[11]), vis(m[12])) < .4 || !headUp(m)) return;
-      const sw = Math.abs(m[11].x - m[12].x);
-      if (k && sw > .14) return;                        // 大きく写る人は全体の画面で見つかっているので、区切った画面からは足さない
-      addBody(all, m);
-    });
-  });
-  return { landmarks: all };
+  let r;
+  if (kind === 'tile' && !k) r = pose.detect(src);
+  else {
+    const cw = Math.round(w * R.tw), ch = Math.round(h * R.th);
+    tileCv.width = cw; tileCv.height = ch;
+    tileCv.getContext('2d').drawImage(src, R.x * w, R.y * h, cw, ch, 0, 0, cw, ch);
+    r = pose.detect(tileCv);
+  }
+  const ms = (r.landmarks || []).map(lm => lm.map(p => ({ x: R.x + p.x * R.tw, y: R.y + p.y * R.th, visibility: p.visibility })))
+    .filter(m => Math.max(vis(m[0]), vis(m[11]), vis(m[12])) >= .4 && headUp(m));
+  if (kind === 'box') {
+    const best = ms.sort((p, q) => Math.abs(bodyMid(p).x - R.cx) - Math.abs(bodyMid(q).x - R.cx))[0];
+    if (best) all.push(best);
+    return;
+  }
+  ms.forEach(m => { if (k && Math.abs(m[11].x - m[12].x) > .14) return; addBody(all, m); });   // 大きく写る人は全体の画面で見つかっているので、区切った画面からは足さない
+}
+function poseTiled(pose, src, w, h){ const all = []; tileRects().forEach((R, k) => rectStep(pose, src, w, h, R, k, 'tile', all)); return { landmarks: all }; }
+function poseBoxes(pose, src, w, h, boxes){ const all = []; boxRects(boxes, w, h).forEach((R, k) => rectStep(pose, src, w, h, R, k, 'box', all)); return { landmarks: all }; }
+// カメラの画面では、1回の処理で1区画ずつ進めて、画面が止まらないようにする（まとめて探すと0.4秒ほど止まったため）
+function jobStart(kind, w, h){ C.job = { kind, rects: kind === 'tile' ? tileRects() : boxRects(C.odB, w, h), i: 0, all: [] }; }
+function jobStep(pose, src, w, h, full){
+  const J = C.job; if (!J) return;
+  if (J.i < J.rects.length) {
+    // 区切りの1つ目（画面全体）は、いま探したばかりの結果をそのまま使う（同じ絵をもう一度探さない）
+    if (J.kind === 'tile' && !J.i) visibleBodies(full).forEach(m => addBody(J.all, m));
+    else rectStep(pose, src, w, h, J.rects[J.i], J.i, J.kind, J.all);
+    J.i++;
+  }
+  if (J.i < J.rects.length) return;
+  C.job = null;
+  if (J.kind === 'tile') { C.tRes = { landmarks: J.all }; C.tAt = performance.now(); C.tU = countPose(C.tRes).u; } else { C.bRes = { landmarks: J.all }; C.bAt = performance.now(); }
 }
 // 同じ人：鼻か、両肩のまん中が近い（実写で鼻の位置がずれて同じ人を2人と数えたため、肩でも見る）。
 // 重なったら、会議の挙手では手を挙げている方を残す。体を動かす画面（byVis）では手首がはっきり見えている方を先に見る
 // （車いすの人で、骨格がずれて手首が見えず「挙げている」と出た方が残ったため）
 const bodyMid = q => ({ x: (q[11].x + q[12].x) / 2, y: (q[11].y + q[12].y) / 2 });
 const wristSeen = q => vis(q[15]) + vis(q[16]);
-function addBody(all, m, byVis){
+function findDup(all, m){
   const sw = Math.abs(m[11].x - m[12].x), b = bodyMid(m);
-  const dup = all.findIndex(o => { const th = Math.max(.05, .9 * Math.max(sw, Math.abs(o[11].x - o[12].x))), a = bodyMid(o);
+  return all.findIndex(o => { const th = Math.max(.05, .9 * Math.max(sw, Math.abs(o[11].x - o[12].x))), a = bodyMid(o);
     return Math.hypot(o[0].x - m[0].x, o[0].y - m[0].y) < th || Math.hypot(a.x - b.x, a.y - b.y) < th; });
+}
+function addBody(all, m){
+  const dup = findDup(all, m);
   if (dup < 0) { all.push(m); return; }
   const o = all[dup];
-  const d = wristSeen(m) - wristSeen(o);
-  if (byVis ? (d > .3 || (d > -.3 && handUp(m) && !handUp(o))) : (handUp(m) !== handUp(o) ? handUp(m) : d > .3)) all[dup] = m;
+  if (handUp(m) !== handUp(o) ? handUp(m) : wristSeen(m) - wristSeen(o) > .3) all[dup] = m;
+}
+// 体を動かす画面：今の映像の結果を先に置き、区切り・人の枠ごとの結果は「今の映像で見つからなかった人を足す」ときだけ使う
+// （古い結果で今の姿勢を上書きすると、下ろした腕を挙げたままと数えるため）。体操は1.2秒、止まって答えるクイズは3秒より古い結果は使わない。
+// クイズに限り、今の映像で腕が読めなかった人は、読めた方に置きかえる（車いすの人で骨格がずれたため）
+function mergePlay(r, t0){
+  const all = visibleBodies(r).slice(), quiz = G && G.mode === 'quiz', age = quiz ? 3000 : 1200;
+  [[C.tRes, C.tAt], [C.bRes, C.bAt]].forEach(([x, at]) => {
+    if (!x || t0 - at > age) return;
+    visibleBodies(x).forEach(m => { const i = findDup(all, m); if (i < 0) all.push(m); else if (quiz && !bodyPose(all[i]) && bodyPose(m)) all[i] = m; });
+  });
+  return { landmarks: all };
 }
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 const pushH = (a, x, n) => { a.push(x); if (a.length > n) a.shift(); };
@@ -4290,7 +4310,7 @@ async function camStart(){
   C.busy = false; $('#camBtn').disabled = false;
 }
 function camStop(){
-  C.on = false; C.gen++; clearTimeout(C.timer); C.tRes = C.bRes = C.play = null;
+  C.on = false; C.gen++; clearTimeout(C.timer); C.tRes = C.bRes = C.play = C.job = null; C.tU = 0;
   if (hvS) { hvClose(); toast('カメラが止まったので、挙手の数えを中止しました'); }
   if (C.st) C.st.getTracks().forEach(t => t.stop());
   C.st = null; $('#camV').srcObject = null; $('#camPrev').srcObject = null;
@@ -4306,25 +4326,23 @@ function camLoop(gen){
     try {
       if (!workCv) workCv = document.createElement('canvas');
       const ww = Math.min(960, v.videoWidth), wh = Math.round(v.videoHeight * ww / v.videoWidth);
-      if (workCv.width !== ww) { workCv.width = ww; workCv.height = wh; }
+      if (workCv.width !== ww || workCv.height !== wh) { workCv.width = ww; workCv.height = wh; }
       workCv.getContext('2d').drawImage(v, 0, 0, ww, wh);
       const r = C.pose.detect(workCv); C.last = r;
       const c = countPose(r);
       if (t0 - C.odT > 600) { C.odT = t0; C.odB = odBoxes(C.od.detectForVideo(v, t0)); C.odN = C.odB.length; }   // 人の検出は小さく写る人のために元の大きさで（0.6秒に1回）
       let up = c.u;
+      // 挙手を数えている間は区切って、体を動かす画面では区切る・人の枠ごとを交互に、0.6秒ごとに1回り探す（1回の処理では1区画だけ）
+      const playing = screen === 'play' && G && (G.ph === 'run' || G.ph === 'ask' || (G.mode === 'quiz' && G.ph === 'ready'));   // メニューや結果の画面では追加で探さない
+      const want = hvS && hvS.ph === 'count' ? 'tile' : playing ? 'both' : '';
+      if (want && !C.job && t0 - C.tT > 600) { C.tT = t0; jobStart(want === 'tile' || (C.alt = !C.alt) ? 'tile' : 'box', v.videoWidth, v.videoHeight); }
+      if (want && C.job) jobStep(C.pose, v, v.videoWidth, v.videoHeight, r);
       if (hvS && hvS.ph === 'count') {
-        if (t0 - C.tT > 600) { C.tT = t0; C.tRes = poseTiled(C.pose, v, v.videoWidth, v.videoHeight); C.tU = countPose(C.tRes).u; }
         up = C.tU; drawSkel($('#hvCv'), C.tRes);
       } else if (hvS) drawSkel($('#hvCv'), r);
-      // 体を動かす画面では、腕を挙げた人が全体の絵で見落とされやすい（実写で5人中2人）。区切って探した結果の方が多ければそちらを使う（0.6秒に1回）
+      // 体を動かす画面では、腕を挙げた人が全体の絵で見落とされやすい（実写で5人中2人）ので、区切り・人の枠ごとの結果で補う
       let tN = 0; C.play = r;
-      if (screen === 'play') {
-        // 区切って探す・人の枠ごとに探すを0.6秒ごとに交互に行い（負荷を半分に）、全体の絵の結果と合わせて1人ずつ見えやすい方を使う
-        if (t0 - C.tT > 600) { C.tT = t0; C.alt = !C.alt;
-          if (C.alt) C.tRes = poseTiled(C.pose, v, v.videoWidth, v.videoHeight); else C.bRes = poseBoxes(C.pose, v, v.videoWidth, v.videoHeight, C.odB || []); }
-        const all = []; [r, C.tRes, C.bRes].forEach(x => visibleBodies(x).forEach(m => addBody(all, m, true)));
-        tN = all.length; C.play = { landmarks: all };
-      }
+      if (playing) { C.play = mergePlay(r, t0); tN = C.play.landmarks.length; }
       pushH(C.pplH, Math.max(c.n, C.odN, tN), 9); pushH(C.upH, up, 5);
       C.ppl = median(C.pplH); C.up = median(C.upH);
       C.fail = 0;
@@ -4441,6 +4459,7 @@ function hvOpen(mode){
   if (!C.on) return toast('先に「カメラを使う」を押してください');
   if (mode === 'ev' && !(E && E.poll)) return;
   const items = mode === 'ev' ? E.poll.o.slice() : ['賛成', '反対'];
+  C.tRes = C.job = null; C.tU = 0;   // 前に探した結果を持ち込まない
   hvS = { mode, items, c: items.map(() => 0), i: -1, ph: 'ready', t0: 0, pk: [], seen: 0 };
   $('#hvQ').hidden = mode === 'ev';
   if (mode !== 'ev') { $('#hvQIn').value = ''; }
@@ -4453,6 +4472,7 @@ function hvNext(){
   if (!hvS) return;
   hvS.i++;
   if (hvS.i >= hvS.items.length) { hvS.ph = 'done'; return hvRender(); }
+  C.tRes = C.job = null; C.tU = 0;   // 前の項目で探した結果を持ち込まない
   hvS.ph = 'count'; hvS.t0 = Date.now(); hvS.pk = []; hvRender();
 }
 function hvTick(){
@@ -4600,7 +4620,7 @@ async function camTest(urls){
     const bp = visibleBodies(pose.detect(im)).map(bodyPose).join(',');
     const ob = odBoxes(od.detect(im)), bx = poseBoxes(pose, im, im.naturalWidth, im.naturalHeight, ob);
     const xb = visibleBodies(bx).sort((p, q) => p[0].x - q[0].x).map(lm => bodyPose(lm) || '?').join(',');
-    const tb = visibleBodies(poseTiled(pose, im, im.naturalWidth, im.naturalHeight)).sort((p, q) => p[0].x - q[0].x).map(lm => (bodyPose(lm) || '?') + ' ' + [0, 11, 12, 13, 14, 15, 16].map(i => lm[i].x.toFixed(2) + '/' + lm[i].y.toFixed(2) + '/' + vis(lm[i]).toFixed(1)).join(' ')).join(' | ');
+    const tb = visibleBodies(poseTiled(pose, im, im.naturalWidth, im.naturalHeight)).sort((p, q) => p[0].x - q[0].x).map(lm => (bodyPose(lm) || '?') + ' ' + [11, 12, 15, 16, 19, 20].map(i => lm[i].x.toFixed(2) + '/' + lm[i].y.toFixed(2) + '/' + vis(lm[i]).toFixed(1)).join(' ')).join(' | ');
     out.push({ body: bp, boxes: xb, tbody: tb, pose: c.n, tiled: t.n + '/' + t.u, od: countOD(od.detect(im)), up: c.u, ges: (g.gestures || []).map(x => x[0].categoryName + ':' + x[0].score.toFixed(2)) });
   }
   pose.close(); ges.close(); od.close();
@@ -4625,8 +4645,8 @@ function bodyPose(lm){
   // 腕の交差：手首の左右の並びが、肩の並びと逆になっていて、手首が胸の高さにある
   // 実写では、交差した手首が肩の内側で寄り合って見えることが多い（左右が入れ替わらない）。胸の高さで手首が近いときも×とみなす
   const inX = w => w.x > Math.min(l.x, r.x) - sw * .15 && w.x < Math.max(l.x, r.x) + sw * .15;
-  const crossed = (Math.sign(lw.x - rw.x) !== Math.sign(l.x - r.x) && [lw, rw].every(w => w.y > sy - sw * .4 && w.y < sy + sw * 2.4))
-    || (spread < sw * .6 && inX(lw) && inX(rw) && (lw.y + rw.y) / 2 > sy - sw * .45 && [lw, rw].every(w => w.y < sy + sw * 1.5));
+  // （手首が近いだけで×にすると、胸の前で手を合わせた人まで×になったため、入れ替わりだけで見る。人ごとの枠で見直すと実写の×も入れ替わって読める）
+  const crossed = Math.sign(lw.x - rw.x) !== Math.sign(l.x - r.x) && [lw, rw].every(w => w.y > sy - sw * .4 && w.y < sy + sw * 2.4);
   return bothUp ? 'up' : side ? 'side' : crossed ? 'cross' : bothDown ? 'down' : '';
 }
 const visibleBodies = r => ((r && r.landmarks) || []).filter(lm => Math.max(vis(lm[0]), vis(lm[11]), vis(lm[12])) >= .4 && headUp(lm));
@@ -4643,7 +4663,7 @@ function parseQuiz(){
     .map(a => ({ q: a[0].slice(0, 60), a: /^[○〇]$/.test(a[1]) ? 'o' : 'x', e: (a[2] || '').slice(0, 80) })).slice(0, 30);
 }
 function openPlay(){
-  C.tRes = C.bRes = C.play = null;   // 前の画面で探した結果を持ち込まない
+  C.tRes = C.bRes = C.play = C.job = null; C.tU = 0;   // 前の画面で探した結果を持ち込まない
   PL.mode = 'menu'; G = null;
   const pv = $('#pV'); pv.srcObject = C.on ? C.st : null; if (C.on) pv.play().catch(() => {});
   renderPlay();
@@ -4715,6 +4735,7 @@ function playTick(r){
       const nx = lm[0].x, ny = lm[0].y, sw = Math.max(.03, Math.abs(lm[11].x - lm[12].x));
       let p = G.P.filter(p => !p.used).sort((a, b) => Math.hypot(a.x - nx, a.y - ny) - Math.hypot(b.x - nx, b.y - ny))[0];
       if (!p || Math.hypot(p.x - nx, p.y - ny) > Math.max(.08, sw * 1.2)) { p = { x: nx, y: ny, n: 0, st: '', c: GYM_COLORS[G.P.length % GYM_COLORS.length] }; G.P.push(p); }
+      if (now - (p.seen || now) > 3000) p.st = '';   // しばらく見えなかった人は、前の姿勢を引き継がない（入れかわった人がいきなり数えられないように）
       p.used = true; p.x = nx; p.y = ny; p.seen = now; p.lm = lm;
       const s = bodyPose(lm);
       if (s === e.top && p.st === 'base') { p.n++; G.tot++; if (G.tot % 50 === 0) toast(`みんなで ${G.tot}回！`); }
