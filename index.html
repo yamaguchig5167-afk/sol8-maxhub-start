@@ -176,6 +176,11 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.6}
 .check{display:flex;align-items:center;gap:12px;font-size:21px;min-height:60px}
 .check input{width:30px;height:30px}
 
+.fsfab{position:fixed;right:18px;bottom:18px;z-index:25;width:64px;height:64px;border-radius:50%;border:2px solid var(--line);background:var(--paper);color:var(--ink);display:none;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.15);opacity:.92;transition:opacity .4s}
+.fsfab svg{width:30px;height:30px}
+.bar .fsbar{min-width:56px;padding:0 12px;display:inline-grid;place-items:center}.bar .fsbar svg{width:28px;height:28px}
+.fsfab.on{display:grid}
+.fsfab.rest{opacity:0;pointer-events:none}
 .toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:16px 28px;border-radius:10px;font-size:21px;opacity:0;pointer-events:none;transition:.25s;z-index:30}
 .toast.on{opacity:1;transform:translateX(-50%)}
 
@@ -922,11 +927,13 @@ body.phone .bar-row .tr{height:22px}
       <div class="field"><label for="sIdle">だれもさわらないとき、待機画面に切り替えるまで</label>
         <select class="in" id="sIdle"><option value="1">1分</option><option value="3">3分</option><option value="5">5分</option><option value="10">10分</option><option value="0">切り替えない</option></select></div>
       <label class="check"><input type="checkbox" id="sBeep">議題の時間になったら、短い音で知らせる</label>
+      <label class="check"><input type="checkbox" id="sFs">画面にさわったら、自動で全画面にする（MAXHUB に出しっぱなしにするとき）</label>
       <p class="help full">ここで変えた内容は、この画面の中（この端末のブラウザ）にだけ保存されます。</p>
     </div>
   </div>
 </div>
 
+<button class="fsfab" id="fsFab" type="button" aria-label="全画面にする" title="全画面にする"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="fsIco" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
 <div class="toast" id="toast" role="status"></div>
 
 <script>//---------------------------------------------------------------------
@@ -3256,7 +3263,7 @@ const DEFAULTS = {
   spot: '正面駐車場（北側）',
   tel: '総務 内線 101\n消防・救急 119',
   idle: 5, beep: true,
-  camWake: true, camGest: true, camLog: false, camId: '', camSeen: false
+  camWake: true, camGest: true, camLog: false, camId: '', camSeen: false, fsAuto: false
 };
 let S = Object.assign({}, DEFAULTS, store.get('ms-settings', {}));
 
@@ -3283,6 +3290,7 @@ function go(id){
   if (id === 'play') openPlay();
   if (id === 'shelter') openShelter();
   $('#pick').classList.remove('on');
+  fsUI();
   camUI();
   poke();
 }
@@ -3644,24 +3652,64 @@ function renderEmerg(){ $('#eSpot').textContent = S.spot || '（設定で入れ�
 /* ---------- 設定 ---------- */
 $('#openSet').onclick = () => {
   $('#sCo').value = S.co; $('#sWel').value = S.wel; $('#sSched').value = S.sched; $('#sNews').value = S.news;
-  $('#sSpot').value = S.spot; $('#sTel').value = S.tel; $('#sIdle').value = String(S.idle); $('#sBeep').checked = !!S.beep;
+  $('#sSpot').value = S.spot; $('#sTel').value = S.tel; $('#sIdle').value = String(S.idle); $('#sBeep').checked = !!S.beep; $('#sFs').checked = !!S.fsAuto;
   $('#setDlg').classList.add('on'); $('#sCo').focus();
 };
 $('#setCancel').onclick = () => $('#setDlg').classList.remove('on');
 $('#setSave').onclick = () => {
   S = { ...S, co: $('#sCo').value.trim() || DEFAULTS.co, wel: $('#sWel').value.trim(), sched: $('#sSched').value, news: $('#sNews').value,
-        spot: $('#sSpot').value.trim(), tel: $('#sTel').value, idle: Number($('#sIdle').value), beep: $('#sBeep').checked };
+        spot: $('#sSpot').value.trim(), tel: $('#sTel').value, idle: Number($('#sIdle').value), beep: $('#sBeep').checked, fsAuto: $('#sFs').checked };
   store.set('ms-settings', S); $('#setDlg').classList.remove('on'); renderHome(); toast('保存しました');
 };
 $('#setDlg').addEventListener('keydown', e => { if (e.key === 'Escape') $('#setDlg').classList.remove('on'); });
 
-/* ---------- 全画面 ---------- */
-$('#fsBtn').onclick = () => {
-  const d = document;
-  if (d.fullscreenElement) d.exitFullscreen && d.exitFullscreen();
-  else (d.documentElement.requestFullscreen ? d.documentElement.requestFullscreen() : Promise.reject()).catch(() => toast('この端末では全画面にできません'));
-};
-document.addEventListener('fullscreenchange', () => $('#fsBtn').textContent = document.fullscreenElement ? '全画面をやめる' : '全画面にする');
+/* ---------- 全画面 ----------
+   どの画面からでも右下の丸いボタンで切りかえる（さわらないと4秒で消え、さわると出る）。スマホ用の画面には出さない。
+   設定で「さわったら自動で全画面」にすると、MAXHUB に出しっぱなしでも最初のひと押しで全画面になる（ブラウザの決まりで、さわる前には全画面にできない）。
+   全画面の間は、画面が暗くならないようにする（Screen Wake Lock。使えないブラウザでは何もしない） */
+const fsOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+const fsPhone = () => ['card', 'shcard', 'join'].includes(screen) || !!document.querySelector('#card.on, #shcard.on, #join.on');
+const FS_IN = 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5', FS_OUT = 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5';
+// 上の帯がある画面は、帯の右はしに全画面のボタンを置く（スタート画面は文字のボタンがあるので除く）
+$$('.screen .bar').forEach(bar => { if (bar.closest('#home')) return;
+  bar.insertAdjacentHTML('beforeend', `<button class="btn ghost fsbar" type="button" aria-label="全画面にする" title="全画面にする"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${FS_IN}"/></svg></button>`); });
+let fsLeft = 0, fsWake = null, fsRestT = 0;
+function fsEnter(quiet){
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) { if (!quiet) toast('この端末では全画面にできません'); return; }
+  try { const pr = req.call(el, { navigationUI: 'hide' }); if (pr && pr.catch) pr.catch(() => { if (!quiet) toast('この端末では全画面にできません'); }); } catch(e){ if (!quiet) toast('この端末では全画面にできません'); }
+}
+function fsExit(){ const d = document; (d.exitFullscreen || d.webkitExitFullscreen || (() => {})).call(d); }
+function fsToggle(){ if (fsOn()) { fsLeft = Date.now(); fsExit(); } else fsEnter(); }
+async function fsWakeSet(){
+  try {
+    if (fsOn() && document.visibilityState === 'visible' && 'wakeLock' in navigator) { if (!fsWake) { fsWake = await navigator.wakeLock.request('screen'); fsWake.addEventListener('release', () => { fsWake = null; }); } }
+    else if (fsWake) { const w = fsWake; fsWake = null; await w.release(); }
+  } catch(e){ fsWake = null; }
+}
+function fsUI(){
+  const on = fsOn(), lab = on ? '全画面をやめる' : '全画面にする';
+  $('#fsBtn').textContent = lab;
+  const f = $('#fsFab'); f.setAttribute('aria-label', lab); f.title = lab;
+  $('#fsIco').setAttribute('d', on ? FS_OUT : FS_IN);
+  $$('.fsbar').forEach(x => { x.setAttribute('aria-label', lab); x.title = lab; x.querySelector('path').setAttribute('d', on ? FS_OUT : FS_IN); });
+  const cur = document.querySelector('.screen.on');
+  f.classList.toggle('on', !!cur && !cur.querySelector('.bar') && !fsPhone());   // 帯のない画面（待機・非常時）だけ、右下の丸いボタンを出す
+}
+function fsWakeUp(){ const f = $('#fsFab'); f.classList.remove('rest'); clearTimeout(fsRestT); fsRestT = setTimeout(() => f.classList.add('rest'), 4000); }
+$('#fsBtn').onclick = fsToggle;
+$('#fsFab').onclick = e => { e.stopPropagation(); fsToggle(); };
+$$('.fsbar').forEach(x => x.onclick = fsToggle);
+// Esc やブラウザの操作でやめたときも「自分でやめた」とみなす
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => { if (!fsOn()) fsLeft = Date.now(); fsUI(); fsWakeSet(); }));
+document.addEventListener('visibilitychange', fsWakeSet);
+['pointermove', 'pointerdown'].forEach(ev => document.addEventListener(ev, fsWakeUp, { passive: true }));
+// 自動で全画面：さわった直後に入る。自分でやめた直後の10分は、勝手に戻さない
+['pointerup', 'keydown'].forEach(ev => document.addEventListener(ev, e => {
+  if (!S.fsAuto || fsOn() || fsPhone() || Date.now() - fsLeft < 600000) return;
+  if (e.target && e.target.closest && e.target.closest('#fsFab, #fsBtn, .fsbar, .modal.on')) return;
+  fsEnter(true);
+}, true));
 
 let tt; function toast(m){ const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2400); }
 
