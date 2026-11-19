@@ -1,0 +1,4 @@
+# Vercel へ送らないもの（画面の表示に要らないファイル）
+README.md
+.gitignore
+.env*
